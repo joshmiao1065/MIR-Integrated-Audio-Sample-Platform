@@ -26,9 +26,9 @@
 
 ## Repository
 
-- **GitHub:** https://github.com/joshmiao1065/ECE464-Databases
+- **GitHub:** https://github.com/joshmiao1065/MIR-Integrated-Audio-Sample-Platform
 - **Main branch:** `main` — all work is committed and pushed here
-- **Clone:** `git clone git@github.com:joshmiao1065/ECE464-Databases.git`
+- **Clone:** `git clone git@github.com:joshmiao1065/MIR-Integrated-Audio-Sample-Platform.git`
 
 ### Recent commits (as of last CLAUDE.md update)
 | Hash | Message |
