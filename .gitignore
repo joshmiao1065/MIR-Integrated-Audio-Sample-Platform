@@ -1,0 +1,42 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+env/
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Environment
+.env
+*.env.local
+
+# Alembic
+alembic/versions/__pycache__/
+
+# Node
+frontend/node_modules/
+frontend/dist/
+frontend/.env
+frontend/.env.local
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs / temp
+*.log
+*.tmp
+tmp/
+
+# ML model caches (can be re-downloaded)
+.cache/
+huggingface/
+
+# Misc stray files
+"Created pip tmp dir. Starting TF reinstall..."
+cd
+echo
