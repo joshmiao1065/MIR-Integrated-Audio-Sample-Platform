@@ -20,6 +20,7 @@ class Sample(Base):
         Integer, nullable=True, unique=True, index=True
     )
     file_url: Mapped[str] = mapped_column(String(512), nullable=False)
+    gdrive_file_id: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     waveform_url: Mapped[Optional[str]] = mapped_column(String(512), nullable=True)
     duration_ms: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     file_size_bytes: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)

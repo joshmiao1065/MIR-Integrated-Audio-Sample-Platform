@@ -31,6 +31,7 @@ from sqlalchemy import text
 
 from app.config import settings
 from app.database import AsyncSessionLocal
+from app.services import gdrive
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 log = logging.getLogger(__name__)
@@ -77,7 +78,7 @@ async def run(keep_pending: int, execute: bool) -> None:
         # ── 2. Collect rows to DELETE ─────────────────────────────────────────
         result = await db.execute(
             text("""
-                SELECT id::text, file_url FROM samples
+                SELECT id::text, file_url, gdrive_file_id FROM samples
                 WHERE id::text != ALL(:keep)
             """),
             {"keep": list(keep_ids)},
@@ -103,25 +104,34 @@ async def run(keep_pending: int, execute: bool) -> None:
             log.info("DRY RUN — pass --execute to perform deletion.")
             return
 
-        # ── 3. Build storage paths ────────────────────────────────────────────
-        storage_paths = []
-        for _id, file_url in rows_to_delete:
-            if file_url and file_url.startswith(storage_prefix):
+        # ── 3. Delete storage files (GDrive or Supabase) ──────────────────────
+        supabase_paths = []
+        gdrive_count = 0
+        for _id, file_url, gdrive_file_id in rows_to_delete:
+            if gdrive_file_id:
+                # New-style: file is on Google Drive
+                gdrive.delete_file(gdrive_file_id)
+                gdrive_count += 1
+            elif file_url and file_url.startswith(storage_prefix):
+                # Old-style: file is in Supabase Storage
                 path = file_url[len(storage_prefix):]
-                # Strip trailing '?' if present
                 path = path.rstrip("?").rstrip("/")
-                storage_paths.append(path)
+                supabase_paths.append(path)
             else:
                 log.warning("Unexpected file_url format, skipping storage delete: %s", file_url)
 
-        log.info("Deleting %d files from Supabase Storage in batches of %d…", len(storage_paths), BATCH_SIZE)
-        for i in range(0, len(storage_paths), BATCH_SIZE):
-            batch = storage_paths[i : i + BATCH_SIZE]
-            try:
-                supabase.storage.from_(bucket).remove(batch)
-                log.info("  Deleted storage batch %d–%d", i + 1, i + len(batch))
-            except Exception as exc:
-                log.error("  Storage batch %d–%d failed: %s", i + 1, i + len(batch), exc)
+        if gdrive_count:
+            log.info("Deleted %d files from Google Drive.", gdrive_count)
+
+        if supabase_paths:
+            log.info("Deleting %d legacy files from Supabase Storage in batches of %d…", len(supabase_paths), BATCH_SIZE)
+            for i in range(0, len(supabase_paths), BATCH_SIZE):
+                batch = supabase_paths[i : i + BATCH_SIZE]
+                try:
+                    supabase.storage.from_(bucket).remove(batch)
+                    log.info("  Deleted Supabase batch %d–%d", i + 1, i + len(batch))
+                except Exception as exc:
+                    log.error("  Supabase batch %d–%d failed: %s", i + 1, i + len(batch), exc)
 
         # ── 4. Delete from DB (cascades handle all child rows) ────────────────
         delete_ids = [str(row[0]) for row in rows_to_delete]

@@ -25,5 +25,15 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
     ALGORITHM: str = "HS256"
 
+    # Google Drive storage (audio files stored here instead of Supabase Storage
+    # to stay within Supabase's 1 GB free-tier quota).
+    # Share a Drive folder with the service account email and set its ID below.
+    GDRIVE_FOLDER_ID: str = ""
+    # Provide exactly one of these two credential sources:
+    #   GDRIVE_SERVICE_ACCOUNT_FILE — path to the JSON key file (local dev)
+    #   GDRIVE_SERVICE_ACCOUNT_JSON — JSON key as a string (Railway / cloud env vars)
+    GDRIVE_SERVICE_ACCOUNT_FILE: Optional[str] = None
+    GDRIVE_SERVICE_ACCOUNT_JSON: Optional[str] = None
+
 
 settings = Settings()

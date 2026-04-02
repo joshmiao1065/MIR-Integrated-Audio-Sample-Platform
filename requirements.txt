@@ -18,6 +18,10 @@ python-dotenv==1.0.1
 supabase==2.4.6
 httpx==0.27.0
 
+# Google Drive (audio file storage — conserves Supabase free-tier quota)
+google-api-python-client>=2.130.0
+google-auth>=2.29.0
+
 # Auth
 python-jose[cryptography]==3.3.0
 passlib[bcrypt]==1.7.4

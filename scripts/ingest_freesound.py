@@ -2,8 +2,9 @@
 """
 Ingest Freesound samples matching a query into the database.
 
-Downloads HQ MP3 previews, uploads them to Supabase Storage, inserts Sample
-rows, and queues each sample for MIR processing.
+Downloads HQ MP3 previews, uploads them to Google Drive, inserts Sample rows,
+and queues each sample for MIR processing.  Audio files are stored on Google
+Drive (not Supabase Storage) to conserve Supabase's 1 GB free-tier quota.
 
 Usage (from repo root):
     # Ingest only (MIR pipeline runs later via API or process_queue):
@@ -23,14 +24,13 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from sqlalchemy import select
-from supabase import create_client
 
-from app.config import settings
 from app.database import AsyncSessionLocal
 from app.models.sample import Sample
 from app.models.system import ProcessingQueue, ProcessingStatus
 from app.routers.samples import _run_mir_pipeline
 from app.scraper.freesound import FreesoundClient
+from app.services import gdrive
 
 logging.basicConfig(
     level=logging.INFO,
@@ -40,8 +40,6 @@ log = logging.getLogger(__name__)
 
 
 async def ingest(query: str, limit: int, process: bool) -> None:
-    supabase = create_client(settings.SUPABASE_URL, settings.SUPABASE_SERVICE_KEY)
-    bucket = settings.SUPABASE_STORAGE_BUCKET
     ingested = 0
 
     async with FreesoundClient() as client, AsyncSessionLocal() as db:
@@ -72,17 +70,12 @@ async def ingest(query: str, limit: int, process: bool) -> None:
                 log.warning("Download failed for %s: %s", freesound_id, exc)
                 continue
 
-            # Upload to Supabase Storage under freesound/<id>.mp3
-            storage_path = f"freesound/{freesound_id}.mp3"
+            # Upload to Google Drive (conserves Supabase free-tier storage quota).
+            filename = f"freesound-{freesound_id}.mp3"
             try:
-                supabase.storage.from_(bucket).upload(
-                    storage_path,
-                    audio_bytes,
-                    {"content-type": "audio/mpeg", "upsert": "true"},
-                )
-                public_url = supabase.storage.from_(bucket).get_public_url(storage_path)
+                gdrive_file_id, public_url = gdrive.upload_audio(audio_bytes, filename)
             except Exception as exc:
-                log.warning("Supabase upload failed for %s: %s", freesound_id, exc)
+                log.warning("Google Drive upload failed for %s: %s", freesound_id, exc)
                 continue
 
             duration_s = sound.get("duration")
@@ -92,6 +85,7 @@ async def ingest(query: str, limit: int, process: bool) -> None:
                 title=sound.get("name", f"freesound-{freesound_id}"),
                 freesound_id=freesound_id,
                 file_url=public_url,
+                gdrive_file_id=gdrive_file_id,
                 duration_ms=duration_ms,
                 file_size_bytes=sound.get("filesize"),
                 mime_type="audio/mpeg",

@@ -213,7 +213,7 @@ async def _run_mir_pipeline(sample_id: uuid.UUID, claimed: bool = False) -> None
 
         try:
             async with httpx.AsyncClient(timeout=60.0) as http:
-                resp = await http.get(file_url)
+                resp = await http.get(file_url, follow_redirects=True)
                 resp.raise_for_status()
                 audio_bytes = resp.content
 

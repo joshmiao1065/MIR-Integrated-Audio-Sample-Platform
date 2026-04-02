@@ -4,9 +4,10 @@ Overnight Freesound ingestion + MIR processing.
 
 Runs two concurrent async tasks in a single process:
 
-  Producer  — pages through Freesound search results, uploads audio to Supabase
-              Storage, inserts Sample + ProcessingQueue rows, and puts each new
-              sample ID onto an internal asyncio.Queue.
+  Producer  — pages through Freesound search results, uploads audio to Google
+              Drive (not Supabase Storage — conserves the 1 GB free-tier quota),
+              inserts Sample + ProcessingQueue rows, and puts each new sample ID
+              onto an internal asyncio.Queue.
 
   Consumer  — reads sample IDs from the queue and runs the full MIR pipeline
               (Librosa features + CLAP embeddings) on each one.  Only one
@@ -53,13 +54,12 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import httpx
 from sqlalchemy import select
-from supabase import create_client
 
-from app.config import settings
 from app.database import AsyncSessionLocal
 from app.models.sample import Sample
 from app.models.system import ProcessingQueue, ProcessingStatus
 from app.routers.samples import _run_mir_pipeline
+from app.services import gdrive
 
 # ── Logging ───────────────────────────────────────────────────────────────────
 
@@ -280,9 +280,6 @@ async def _producer(
     """
     from app.scraper.freesound import FreesoundClient
 
-    supabase = create_client(settings.SUPABASE_URL, settings.SUPABASE_SERVICE_KEY)
-    bucket = settings.SUPABASE_STORAGE_BUCKET
-
     # Mutable counter shared between _ingest_page and the outer loop.
     # Reset to ip["ingested"] on resume so the cap is respected across restarts.
     query_ingested = [0]
@@ -347,17 +344,13 @@ async def _producer(
                     log.warning("Download failed %s: %s", freesound_id, exc)
                     continue
 
-                storage_path = f"freesound/{freesound_id}.mp3"
+                filename = f"freesound-{freesound_id}.mp3"
                 try:
-                    supabase.storage.from_(bucket).upload(
-                        storage_path, audio_bytes,
-                        {"content-type": "audio/mpeg", "upsert": "true"},
-                    )
-                    public_url = supabase.storage.from_(bucket).get_public_url(
-                        storage_path
+                    gdrive_file_id, public_url = await asyncio.get_running_loop().run_in_executor(
+                        None, gdrive.upload_audio, audio_bytes, filename
                     )
                 except Exception as exc:
-                    log.warning("Storage upload failed %s: %s", freesound_id, exc)
+                    log.warning("Google Drive upload failed %s: %s", freesound_id, exc)
                     continue
 
                 dur = sound.get("duration")
@@ -365,6 +358,7 @@ async def _producer(
                     title=sound.get("name", f"freesound-{freesound_id}"),
                     freesound_id=freesound_id,
                     file_url=public_url,
+                    gdrive_file_id=gdrive_file_id,
                     duration_ms=int(dur * 1000) if dur is not None else None,
                     file_size_bytes=sound.get("filesize"),
                     mime_type="audio/mpeg",

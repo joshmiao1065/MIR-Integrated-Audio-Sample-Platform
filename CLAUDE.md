@@ -152,7 +152,7 @@ drain the full queue. Run `curl http://localhost:8000/api/admin/queue` to check.
 | ORM | SQLAlchemy 2.0 (async) | `AsyncSession`, `async_sessionmaker`, mapped columns |
 | Database | PostgreSQL + pgvector extension | `asyncpg` driver; HNSW index for cosine search |
 | Migrations | Alembic 1.13 | Async migration runner in `alembic/env.py` |
-| File storage | Supabase Storage (S3-compatible) | Audio previews stored as `freesound/<id>.mp3` |
+| File storage | **Google Drive** (service account) | Audio previews stored in a shared Drive folder; `file_url` = direct download link; `gdrive_file_id` stored for deletion. Supabase Storage retained only for legacy files and DB/vector data. |
 | Auth | JWT via `python-jose` + `passlib[bcrypt]` | Bearer tokens; `app/deps.py` has the two dependencies |
 | Audio features | Librosa 0.10 | BPM, key, RMS energy, loudness, spectral centroid, ZCR |
 | Embeddings | LAION-CLAP (`laion-clap` 1.1.4) | 512-dim audio/text joint embedding; ~900 MB weights |
@@ -225,11 +225,17 @@ Copy `.env.example` to `.env` and fill in all values:
 # asyncpg connection string (required)
 DATABASE_URL=postgresql+asyncpg://postgres:password@localhost:5432/audio_samples
 
-# Supabase (required — used for file storage)
+# Supabase (required — used for DB/vector data and legacy Storage pruning)
 SUPABASE_URL=https://your-project-ref.supabase.co
 SUPABASE_ANON_KEY=your-anon-key-here
 SUPABASE_SERVICE_KEY=your-service-role-key-here
 SUPABASE_STORAGE_BUCKET=audio-previews
+
+# Google Drive (required — new audio file storage)
+GDRIVE_FOLDER_ID=your-drive-folder-id
+GDRIVE_SERVICE_ACCOUNT_FILE=path/to/service-account-key.json
+# OR for cloud deployment (Railway):
+# GDRIVE_SERVICE_ACCOUNT_JSON={"type":"service_account",...}
 
 # Freesound API (only API_KEY is required; CLIENT_ID/SECRET are optional OAuth fields)
 FREESOUND_API_KEY=your-freesound-api-key
@@ -259,7 +265,8 @@ PostgreSQL with the `vector` and `uuid-ossp` extensions. All PKs are `UUID` gene
 - `preferences_json` (JSON, nullable), `is_active` (bool), `created_at`, `updated_at`
 
 **`samples`** — the central table
-- `id`, `title`, `freesound_id` (int, nullable, unique), `file_url` (Supabase Storage URL)
+- `id`, `title`, `freesound_id` (int, nullable, unique), `file_url` (Google Drive direct-download URL for new files; Supabase Storage URL for legacy files)
+- `gdrive_file_id` (nullable String(255)) — Drive file ID for efficient deletion; NULL on legacy Supabase-stored files
 - `waveform_url` (nullable), `duration_ms`, `file_size_bytes`, `mime_type`
 - `user_id_owner` → `users.id` (SET NULL), `pack_id` → `packs.id` (SET NULL)
 - `created_at`
@@ -371,7 +378,7 @@ Session A (< 1 s):
   3. Close session — connection returned to pool.
 
 No session (60–120 s):
-  4. Download audio bytes from Supabase Storage via httpx
+  4. Download audio bytes via httpx (`follow_redirects=True` — required for GDrive URLs which redirect to drive.usercontent.google.com)
   5. [thread] Librosa  → extract_features(audio_bytes)
   6. [thread] CLAP     → encode_audio(audio_bytes)
   7. [thread] YAMNet   )
@@ -534,8 +541,8 @@ See the Bulk Pipeline Worker section and LESSONS.md §21.
 The script:
 1. Skips sounds already in the DB (checks `freesound_id`)
 2. Downloads HQ MP3 preview
-3. Uploads to Supabase Storage at `freesound/<id>.mp3`
-4. Inserts `Sample` + `ProcessingQueue(pending)` row
+3. Uploads to **Google Drive** via `gdrive.upload_audio()` — returns `(gdrive_file_id, public_url)`
+4. Inserts `Sample` (with `gdrive_file_id` and `file_url`) + `ProcessingQueue(pending)` row
 5. If `--process`: calls `_run_mir_pipeline(sample.id)` inline
 
 ---
@@ -707,9 +714,8 @@ This endpoint is defined in `app/main.py` as `GET /api/admin/queue`.
 - **`samples.file_size_bytes` is the Freesound original file size**, not the stored
   MP3 preview. Do not use it to estimate Supabase Storage usage — it reads orders
   of magnitude too high. Actual previews are ~150–300 KB each. See LESSONS.md §19.
-- **Supabase free tier Storage limit is 1 GB** (~4,000–6,000 tracks). Ingesting
-  without `--max-per-query` will breach this quickly. If storage is exceeded, see
-  LESSONS.md §18 and §21 for the safe pruning pattern.
+- **Audio storage is now Google Drive** (not Supabase Storage). New files go to Drive via `app/services/gdrive.py`. Supabase Storage is only accessed during `prune_storage.py` to clean up legacy files. Drive has a 15 GB free quota per Google account — far more than Supabase's 1 GB.
+- **`prune_storage.py` handles both backends**: if `gdrive_file_id IS NOT NULL` it calls `gdrive.delete_file()`; if `file_url` has the Supabase Storage prefix it uses the Supabase client. This dual-backend path covers the transition period. If storage is exceeded, see LESSONS.md §18 and §21 for the safe pruning pattern.
 - **Run `process_queue` in a user-owned terminal.** Background nohup processes die
   silently — you won't know the worker is down until you notice the queue not
   draining. See LESSONS.md §20.
