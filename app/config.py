@@ -25,15 +25,20 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
     ALGORITHM: str = "HS256"
 
-    # Google Drive storage (audio files stored here instead of Supabase Storage
-    # to stay within Supabase's 1 GB free-tier quota).
-    # Share a Drive folder with the service account email and set its ID below.
+    # Google Drive storage — uses OAuth2 with your personal Google account so that
+    # uploads count against your Google One quota (1 TB) rather than a service
+    # account's separate 15 GB quota.
+    #
+    # To obtain these values, run once:
+    #   python -m scripts.gdrive_auth --client-id <ID> --client-secret <SECRET>
+    #
+    # Create a folder in your personal Drive and paste its ID (from the URL) below.
     GDRIVE_FOLDER_ID: str = ""
-    # Provide exactly one of these two credential sources:
-    #   GDRIVE_SERVICE_ACCOUNT_FILE — path to the JSON key file (local dev)
-    #   GDRIVE_SERVICE_ACCOUNT_JSON — JSON key as a string (Railway / cloud env vars)
-    GDRIVE_SERVICE_ACCOUNT_FILE: Optional[str] = None
-    GDRIVE_SERVICE_ACCOUNT_JSON: Optional[str] = None
+    # OAuth2 "Desktop app" credentials from Google Cloud Console.
+    GDRIVE_CLIENT_ID: Optional[str] = None
+    GDRIVE_CLIENT_SECRET: Optional[str] = None
+    # Refresh token produced by scripts/gdrive_auth.py — never expires unless revoked.
+    GDRIVE_REFRESH_TOKEN: Optional[str] = None
 
 
 settings = Settings()

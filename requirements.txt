@@ -19,8 +19,10 @@ supabase==2.4.6
 httpx==0.27.0
 
 # Google Drive (audio file storage — conserves Supabase free-tier quota)
+# OAuth2 with personal Google account so uploads count against your Google One quota.
 google-api-python-client>=2.130.0
 google-auth>=2.29.0
+google-auth-oauthlib>=1.2.0
 
 # Auth
 python-jose[cryptography]==3.3.0
@@ -30,13 +32,13 @@ bcrypt==4.0.1
 # Audio processing
 librosa==0.10.2
 soundfile==0.12.1
-numpy>=1.26.0  # TF 2.20 requires >=1.26; _utils module added in 1.25 (was missing in 1.23)
+numpy>=1.26.0,<2.0  # TF 2.20 requires >=1.26; numpy 2.x breaks pyarrow/numexpr/bottleneck compiled against 1.x
 
 # ML models (CLAP)
 torch==2.3.0
 torchvision==0.18.0
 transformers==4.41.2
-laion-clap==1.1.4
+laion-clap==1.1.7  # 1.1.4 pinned numpy==1.23.5; 1.1.7 relaxed to >=1.23.5,<2.0 (compatible with TF 2.20)
 
 # YAMNet + MusiCNN (TensorFlow ecosystem)
 # TF 2.20 ships with Keras 3 which removed tf.compat.v1.layers.

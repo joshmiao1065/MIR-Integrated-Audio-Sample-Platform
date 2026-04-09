@@ -1,38 +1,63 @@
 """Google Drive storage service for audio files.
 
-Audio previews (150–300 KB MP3) are uploaded to a shared Google Drive folder
-and made publicly accessible via a direct-download link. This conserves
-Supabase's free-tier Storage quota (1 GB) by keeping only vector embeddings
-and relational metadata in Supabase.
+Audio previews (150–300 KB MP3) are uploaded to a folder in the developer's
+personal Google Drive and made publicly accessible via a direct-download link.
+This conserves Supabase's free-tier Storage quota (1 GB) by keeping only vector
+embeddings and relational metadata in Supabase.
+
+Because a *personal* Google account is used (Google One 1 TB plan), OAuth2
+credentials are required instead of a service account.  Service accounts have
+their own separate 15 GB Drive quota and would NOT draw from Google One storage.
 
 Setup
 -----
-1. In Google Cloud Console, create a project and enable the Drive API.
-2. Under IAM → Service Accounts, create a service account (no GCP roles needed).
-3. Generate and download a JSON key for that service account.
-4. In your Google Drive, create a folder for audio previews.
-5. Share that folder with the service account's email address (Editor role).
-6. Copy the folder ID from the Drive URL (the long alphanumeric string after
-   /folders/) and set it as GDRIVE_FOLDER_ID in .env.
-7. Set either:
-   - GDRIVE_SERVICE_ACCOUNT_FILE  — path to the JSON key file (local dev)
-   - GDRIVE_SERVICE_ACCOUNT_JSON  — the JSON key contents as a single-line
-                                    string (Railway / cloud deployment)
+1. In Google Cloud Console (console.cloud.google.com), create a free project.
+2. Enable the Google Drive API for that project.
+3. Under APIs & Services → Credentials, create an OAuth 2.0 Client ID.
+   Application type: **Desktop app**.
+4. Download the client JSON or note the Client ID and Client Secret.
+5. Run the one-time authorisation script:
+       python -m scripts.gdrive_auth --client-id <ID> --client-secret <SECRET>
+   Follow the prompts: open the printed URL in your browser, log in with the
+   Google account that has Google One, approve Drive access, then paste the
+   authorisation code back into the terminal.
+6. Copy the printed GDRIVE_REFRESH_TOKEN value into .env.
+7. In your personal Google Drive, create a folder for audio previews.
+   Copy the folder ID from the URL (/folders/<ID>) → set as GDRIVE_FOLDER_ID.
+
+Environment variables (all required)
+--------------------------------------
+GDRIVE_CLIENT_ID       — OAuth2 client ID from Cloud Console
+GDRIVE_CLIENT_SECRET   — OAuth2 client secret from Cloud Console
+GDRIVE_REFRESH_TOKEN   — long-lived token from scripts/gdrive_auth.py
+GDRIVE_FOLDER_ID       — Drive folder ID where audio files are uploaded
+
+For Railway / cloud deployment, set the same four env vars in the Railway
+dashboard.  No JSON key file is needed — the refresh token is the only secret
+that must be stored.
 
 Public access
 -------------
 After every upload, the file is granted 'anyone with link → reader' permission.
-The stored file_url is a direct download link that Wavesurfer.js can stream:
+The stored file_url is a direct-download link that Wavesurfer.js can stream:
   https://drive.google.com/uc?export=download&id=<FILE_ID>
 Google Drive redirects this to drive.usercontent.google.com which serves
 Access-Control-Allow-Origin: * for publicly shared files, so browser-side
 audio playback works without a backend proxy.
+
+Token refresh
+-------------
+OAuth2 access tokens expire after 1 hour.  The google-api-python-client library
+refreshes them automatically using the stored refresh token — no manual
+intervention is required.  The refresh token itself does not expire unless:
+  - You revoke it in your Google Account security settings, or
+  - It is unused for 6 consecutive months.
 """
-import json
 import logging
 from functools import lru_cache
 
-from google.oauth2 import service_account
+from google.auth.transport.requests import Request
+from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaInMemoryUpload
 
@@ -40,29 +65,50 @@ from app.config import settings
 
 log = logging.getLogger(__name__)
 
-_SCOPES = ["https://www.googleapis.com/auth/drive.file"]
+_SCOPES = ["https://www.googleapis.com/auth/drive"]
 
-# Direct-download pattern — final redirect target serves CORS: * for public files.
+# Direct-download URL — final redirect target serves CORS: * for public files.
 _DOWNLOAD_URL = "https://drive.google.com/uc?export=download&id={file_id}"
 
 
 @lru_cache(maxsize=1)
 def _service():
-    """Lazy singleton: build the Drive v3 service once per process."""
-    if settings.GDRIVE_SERVICE_ACCOUNT_JSON:
-        info = json.loads(settings.GDRIVE_SERVICE_ACCOUNT_JSON)
-        creds = service_account.Credentials.from_service_account_info(
-            info, scopes=_SCOPES
-        )
-    elif settings.GDRIVE_SERVICE_ACCOUNT_FILE:
-        creds = service_account.Credentials.from_service_account_file(
-            settings.GDRIVE_SERVICE_ACCOUNT_FILE, scopes=_SCOPES
-        )
-    else:
+    """Lazy singleton: build the Drive v3 API client once per process.
+
+    Uses OAuth2 credentials tied to the developer's personal Google account so
+    that file storage counts against their Google One quota.  The access token
+    is refreshed automatically by the google-auth library whenever it expires.
+    """
+    missing = [
+        name
+        for name, val in [
+            ("GDRIVE_CLIENT_ID", settings.GDRIVE_CLIENT_ID),
+            ("GDRIVE_CLIENT_SECRET", settings.GDRIVE_CLIENT_SECRET),
+            ("GDRIVE_REFRESH_TOKEN", settings.GDRIVE_REFRESH_TOKEN),
+        ]
+        if not val
+    ]
+    if missing:
         raise RuntimeError(
-            "Google Drive credentials not configured. "
-            "Set GDRIVE_SERVICE_ACCOUNT_JSON or GDRIVE_SERVICE_ACCOUNT_FILE in .env."
+            f"Google Drive OAuth2 credentials not configured. "
+            f"Missing .env vars: {', '.join(missing)}. "
+            f"Run  python -m scripts.gdrive_auth  once to obtain a refresh token."
         )
+
+    creds = Credentials(
+        token=None,  # no cached access token — will be fetched on first API call
+        refresh_token=settings.GDRIVE_REFRESH_TOKEN,
+        token_uri="https://oauth2.googleapis.com/token",
+        client_id=settings.GDRIVE_CLIENT_ID,
+        client_secret=settings.GDRIVE_CLIENT_SECRET,
+        scopes=_SCOPES,
+    )
+
+    # Eagerly refresh so that any misconfiguration surfaces at startup rather
+    # than mid-upload.  This also populates creds.token for the first request.
+    creds.refresh(Request())
+    log.debug("Google Drive OAuth2 access token obtained successfully.")
+
     return build("drive", "v3", credentials=creds)
 
 
@@ -71,13 +117,20 @@ def upload_audio(audio_bytes: bytes, filename: str) -> tuple[str, str]:
 
     The file is immediately made publicly readable so the frontend can stream it.
 
+    Parameters
+    ----------
+    audio_bytes : bytes
+        Raw audio data (MP3 or any format supported by the Drive API).
+    filename : str
+        Destination filename in Drive (e.g. ``"freesound-12345.mp3"``).
+
     Returns
     -------
     (file_id, public_download_url)
-        file_id  — the Drive file ID, stored in samples.gdrive_file_id for
-                   efficient deletion later.
-        public_download_url — stored in samples.file_url; used by both the
-                   frontend (Wavesurfer.js) and the MIR pipeline (httpx download).
+        file_id              — Drive file ID; stored in samples.gdrive_file_id
+                               for efficient deletion later.
+        public_download_url  — stored in samples.file_url; used by the frontend
+                               (Wavesurfer.js) and the MIR pipeline (httpx).
     """
     svc = _service()
 
@@ -86,19 +139,24 @@ def upload_audio(audio_bytes: bytes, filename: str) -> tuple[str, str]:
         file_metadata["parents"] = [settings.GDRIVE_FOLDER_ID]
 
     media = MediaInMemoryUpload(audio_bytes, mimetype="audio/mpeg", resumable=False)
-    uploaded = svc.files().create(
-        body=file_metadata,
-        media_body=media,
-        fields="id",
-    ).execute()
+    uploaded = (
+        svc.files()
+        .create(
+            body=file_metadata,
+            media_body=media,
+            fields="id",
+        )
+        .execute()
+    )
     file_id: str = uploaded["id"]
 
-    # Grant public read so the browser can stream without auth.
+    # Grant public read so the browser can stream without authentication.
     svc.permissions().create(
         fileId=file_id,
         body={"type": "anyone", "role": "reader"},
     ).execute()
 
+    log.debug("GDrive uploaded %s → %s", filename, file_id)
     return file_id, _DOWNLOAD_URL.format(file_id=file_id)
 
 

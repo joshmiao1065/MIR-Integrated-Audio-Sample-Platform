@@ -111,7 +111,8 @@ Railway at runtime. Options in order of preference:
 ### Environment variables needed on Railway
 All vars from `.env`: `DATABASE_URL`, `SUPABASE_URL`, `SUPABASE_ANON_KEY`,
 `SUPABASE_SERVICE_KEY`, `SUPABASE_STORAGE_BUCKET`, `SECRET_KEY`,
-`ACCESS_TOKEN_EXPIRE_MINUTES`. Do NOT commit `.env` to git.
+`ACCESS_TOKEN_EXPIRE_MINUTES`, `GDRIVE_FOLDER_ID`, `GDRIVE_CLIENT_ID`,
+`GDRIVE_CLIENT_SECRET`, `GDRIVE_REFRESH_TOKEN`. Do NOT commit `.env` to git.
 
 ### CORS update required before deployment
 `app/main.py` currently allows only `http://localhost:5173`. Add the Vercel
@@ -152,10 +153,10 @@ drain the full queue. Run `curl http://localhost:8000/api/admin/queue` to check.
 | ORM | SQLAlchemy 2.0 (async) | `AsyncSession`, `async_sessionmaker`, mapped columns |
 | Database | PostgreSQL + pgvector extension | `asyncpg` driver; HNSW index for cosine search |
 | Migrations | Alembic 1.13 | Async migration runner in `alembic/env.py` |
-| File storage | **Google Drive** (service account) | Audio previews stored in a shared Drive folder; `file_url` = direct download link; `gdrive_file_id` stored for deletion. Supabase Storage retained only for legacy files and DB/vector data. |
+| File storage | **Google Drive** (personal OAuth2) | Audio previews stored in personal Drive (Google One 1 TB quota); `file_url` = direct download link; `gdrive_file_id` stored for deletion. OAuth2 refresh token in `.env` — no JSON key file needed. See lesson 23. |
 | Auth | JWT via `python-jose` + `passlib[bcrypt]` | Bearer tokens; `app/deps.py` has the two dependencies |
 | Audio features | Librosa 0.10 | BPM, key, RMS energy, loudness, spectral centroid, ZCR |
-| Embeddings | LAION-CLAP (`laion-clap` 1.1.4) | 512-dim audio/text joint embedding; ~900 MB weights |
+| Embeddings | LAION-CLAP (`laion-clap` 1.1.7) | 512-dim audio/text joint embedding; ~900 MB weights. Upgraded from 1.1.4 to fix numpy pin conflict with TF 2.20 (see lesson 24). |
 | Sound events | Google YAMNet (TF Hub) | 521 AudioSet classes; fine-grained event labels |
 | Music tags | MTG MusiCNN (`musicnn` 0.1.6) | MagnaTagATune labels; genre/mood/instrumentation |
 | Scraper | Freesound APIv2 (`httpx`) | Token-based auth; downloads HQ MP3 previews |
@@ -209,7 +210,9 @@ audio-sample-manager/
 │   │   └── musicnn_worker.py     # MusiCNNWorker: predict() → List[str] music tags
 │   └── scraper/
 │       └── freesound.py          # FreesoundClient: search_sounds, get_sound, iter_all_sounds, download_preview
+├── install.sh                    # Installs all deps including musicnn --no-deps; use instead of bare pip install -r
 ├── scripts/
+│   ├── gdrive_auth.py            # One-time OAuth2 flow to obtain GDRIVE_REFRESH_TOKEN for personal Drive
 │   ├── ingest_freesound.py       # CLI: ingest Freesound samples; optional --process flag runs MIR pipeline
 │   └── process_queue.py          # CLI: batch MIR worker; polls processing_queue for pending rows
 └── frontend/                     # React + Vite + Wavesurfer.js (see Frontend section below)
@@ -231,11 +234,16 @@ SUPABASE_ANON_KEY=your-anon-key-here
 SUPABASE_SERVICE_KEY=your-service-role-key-here
 SUPABASE_STORAGE_BUCKET=audio-previews
 
-# Google Drive (required — new audio file storage)
+# Google Drive (required — audio file storage, uses your Google One 1 TB quota)
+# Run once:  python -m scripts.gdrive_auth --client-id ID --client-secret SECRET
+# Then fill in the refresh token it prints.
 GDRIVE_FOLDER_ID=your-drive-folder-id
-GDRIVE_SERVICE_ACCOUNT_FILE=path/to/service-account-key.json
-# OR for cloud deployment (Railway):
-# GDRIVE_SERVICE_ACCOUNT_JSON={"type":"service_account",...}
+GDRIVE_CLIENT_ID=your-oauth2-client-id.apps.googleusercontent.com
+GDRIVE_CLIENT_SECRET=your-oauth2-client-secret
+GDRIVE_REFRESH_TOKEN=your-refresh-token
+# Note: the old service account JSON key (audio-sample-manager-*.json) is no longer
+# used. You can delete that file — it connected to a service account with its own
+# separate 15 GB quota, NOT your Google One 1 TB storage.
 
 # Freesound API (only API_KEY is required; CLIENT_ID/SECRET are optional OAuth fields)
 FREESOUND_API_KEY=your-freesound-api-key
