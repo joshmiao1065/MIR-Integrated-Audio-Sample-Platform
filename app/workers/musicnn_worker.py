@@ -57,6 +57,9 @@ def _predict_subprocess(tmp_path: str, top_k: int) -> list[str]:
     """
     import os as _os
     _os.environ.setdefault("TF_USE_LEGACY_KERAS", "1")
+    # Hide CUDA devices so TF never attempts cuInit — the CUDA error 303 in WSL2
+    # (CUDA_ERROR_NOT_PERMITTED) fires right before the session.run() crash.
+    _os.environ.setdefault("CUDA_VISIBLE_DEVICES", "")
 
     from musicnn.tagger import top_tags  # type: ignore[import]
 
@@ -125,8 +128,20 @@ class MusiCNNWorker:
                 with _executor_lock:
                     global _executor
                     _executor = None
-                executor = _get_executor()
-                future = executor.submit(_predict_subprocess, tmp_path, top_k)
-                return future.result(timeout=300)
+                try:
+                    executor = _get_executor()
+                    future = executor.submit(_predict_subprocess, tmp_path, top_k)
+                    return future.result(timeout=300)
+                except concurrent.futures.process.BrokenProcessPool:
+                    # Retry also failed (likely a TF/WSL2 compat crash in session.run).
+                    # Reset the pool for the next caller and return no tags so the
+                    # rest of the pipeline (CLAP, YAMNet, Librosa) can still complete.
+                    log.error(
+                        "MusiCNN subprocess pool broken on retry — "
+                        "returning [] so pipeline can still complete without musicnn tags."
+                    )
+                    with _executor_lock:
+                        _executor = None
+                    return []
         finally:
             os.unlink(tmp_path)
