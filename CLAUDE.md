@@ -207,7 +207,8 @@ audio-sample-manager/
 │   │   ├── clap_worker.py        # CLAPWorker: encode_text(), encode_audio()
 │   │   ├── librosa_worker.py     # extract_features() → dict matching audio_metadata columns
 │   │   ├── yamnet_worker.py      # YAMNetWorker: predict() → List[str] sound event labels
-│   │   └── musicnn_worker.py     # MusiCNNWorker: predict() → List[str] music tags
+│   │   ├── musicnn_worker.py     # MusiCNNWorker: predict() → List[str] music tags
+│   │   └── _musicnn_proc.py      # Persistent /usr/bin/python3 worker script (stdin/stdout JSON IPC)
 │   └── scraper/
 │       └── freesound.py          # FreesoundClient: search_sounds, get_sound, iter_all_sounds, download_preview
 ├── install.sh                    # Installs all deps including musicnn --no-deps; use instead of bare pip install -r
@@ -434,14 +435,18 @@ imports musicnn inside a subprocess. See LESSONS.md §2 for full details.
 | `YAMNetWorker.predict(bytes, top_k=5)` | Raw audio bytes | `List[str]` | 521 AudioSet classes; resamples to 16 kHz |
 | `MusiCNNWorker.predict(bytes, top_k=5)` | Raw audio bytes | `List[str]` | MagnaTagATune ~50 classes; **runs in subprocess** — see `musicnn_worker.py` |
 
-**MusiCNN subprocess isolation** (`app/workers/musicnn_worker.py`):
-MusiCNNWorker runs musicnn inside a persistent `ProcessPoolExecutor(spawn=1)`.
-This prevents `tf.compat.v1.disable_eager_execution()` from contaminating the
-main process. The subprocess is recreated automatically if it crashes
-(`BrokenProcessPool` handler with single retry). Each call writes a temp MP3,
-submits to the subprocess, and deletes the temp file in a `finally` block.
-Audio shorter than 3 s returns `[]` instead of crashing (musicnn `UnboundLocalError`
-on `batch` variable). See LESSONS.md §2 and §3.
+**MusiCNN subprocess isolation** (`app/workers/musicnn_worker.py` + `_musicnn_proc.py`):
+MusiCNNWorker runs musicnn inside a **persistent `/usr/bin/python3` subprocess**
+using stdin/stdout JSON IPC. Using Anaconda's Python causes `~/anaconda3/lib/
+libprotobuf.so.25.3.0` to conflict with TF's internal protobuf, producing a
+deterministic SIGSEGV at offset `0x16d5fd` inside `sess.run()`. The system Python
+does not have Anaconda's lib/ on its dynamic-linker path, so TF finds the correct
+libprotobuf and runs cleanly.
+Architecture: `_musicnn_proc.py` starts, loads TF + musicnn once (READY signal),
+then loops reading `{"path":..., "top_k":...}` from stdin and writing `{"tags":[...]}`
+to stdout. `musicnn_worker.py` manages the subprocess lifecycle (restart on crash,
+5-minute per-call timeout). Audio shorter than 3 s returns `[]` (musicnn
+`UnboundLocalError` on `batch`). See LESSONS.md §2, §27, §28.
 
 ### Tag deduplication
 
