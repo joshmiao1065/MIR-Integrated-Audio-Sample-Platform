@@ -22,8 +22,9 @@ export const useAuthStore = create<AuthState>((set) => ({
 
   register: async (email, username, password) => {
     await apiRegister(email, username, password);
-    // Auto-login after registration
-    const data = await apiLogin(username, password);
+    // Auto-login after registration — backend /auth/token looks up by email,
+    // not username, so pass email as the OAuth2 "username" field.
+    const data = await apiLogin(email, password);
     localStorage.setItem("access_token", data.access_token);
     localStorage.setItem("username", username);
     set({ token: data.access_token, username });

@@ -29,8 +29,9 @@ export function LoginPage() {
       <div className="auth-card">
         <h1>Log in</h1>
         <form onSubmit={handleSubmit}>
-          <label>Username</label>
+          <label>Email</label>
           <input
+            type="email"
             value={username}
             onChange={(e) => setUsername(e.target.value)}
             required

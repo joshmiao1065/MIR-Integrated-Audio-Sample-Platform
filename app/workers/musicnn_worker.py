@@ -50,6 +50,21 @@ def _predict_subprocess(tmp_path: str, top_k: int) -> list[str]:
     """
     import os as _os
     _os.environ.setdefault("TF_USE_LEGACY_KERAS", "1")
+
+    # Guard: musicnn needs >= 3 s of audio.  For very short clips (< a few
+    # hundred ms) TF/numpy crash at a level below Python exceptions, which
+    # kills the subprocess process entirely and causes BrokenProcessPool in
+    # the parent — even after the UnboundLocalError guard below.  Check
+    # duration with librosa before importing musicnn so we can bail out
+    # cleanly without touching TF at all.
+    import librosa
+    try:
+        duration = librosa.get_duration(path=tmp_path)
+        if duration < 3.0:
+            return []
+    except Exception:
+        pass  # if duration check fails, fall through and let musicnn try
+
     from musicnn.tagger import top_tags  # type: ignore[import]
 
     try:

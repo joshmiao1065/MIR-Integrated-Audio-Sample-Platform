@@ -57,7 +57,7 @@ Agents should be aware of outstanding requirements when suggesting work.
 | Individual effort | ✅ | Solo project |
 | 10–15 tables | ✅ | 16 tables implemented |
 | Authentication | ✅ | JWT, bcrypt, register/login, Bearer tokens, ownership guards |
-| **Cloud deployment** | ❌ **NOT DONE** | Biggest remaining gap — see Deployment section below |
+| **Cloud deployment** | ⚠️ **PARTIAL** | Frontend deployed at `https://mirintegratedaudiosampleplatform-joshmiao.disent.com`; backend not yet on Railway — see Deployment section |
 | Alembic migrations | ✅ | Async runner; no raw SQL fixes |
 | External integration | ✅ | Freesound API, Supabase Storage, CLAP, YAMNet, MusiCNN |
 | Data seed / scraper | ✅ | 4,000 samples from Freesound; overnight batch ingestion |
@@ -114,9 +114,10 @@ All vars from `.env`: `DATABASE_URL`, `SUPABASE_URL`, `SUPABASE_ANON_KEY`,
 `ACCESS_TOKEN_EXPIRE_MINUTES`, `GDRIVE_FOLDER_ID`, `GDRIVE_CLIENT_ID`,
 `GDRIVE_CLIENT_SECRET`, `GDRIVE_REFRESH_TOKEN`. Do NOT commit `.env` to git.
 
-### CORS update required before deployment
-`app/main.py` currently allows only `http://localhost:5173`. Add the Vercel
-production URL to `allow_origins` before deploying.
+### CORS — already updated
+`app/main.py` now allows both `http://localhost:5173` (dev) and
+`https://mirintegratedaudiosampleplatform-joshmiao.disent.com` (production frontend).
+No further CORS change needed unless the frontend domain changes.
 
 ### Frontend env var
 Set `VITE_API_URL` in Vercel's environment settings to the Railway backend URL.
@@ -124,24 +125,23 @@ The Vite proxy (localhost:8000) only works in dev; production needs the real URL
 
 ---
 
-## Current Database State (as of 2026-03-18)
+## Current Database State (as of 2026-04-09)
 
 ```
-samples:          4,000
-audio_embeddings:   491  (processing ongoing — ~3/min)
-audio_metadata:     491
-tags:               123
-sample_tags:      3,020  (~6 auto-tags per processed sample)
+samples:          6,039  (total ingested from Freesound)
+audio_embeddings: (processing ongoing)
+audio_metadata:   (processing ongoing)
+tags:             (growing)
+sample_tags:      (growing)
 users:              1    (developer only — needs demo data)
 comments:           0    ← needs seeding before demo
 ratings:            0    ← needs seeding before demo
 collections:        0    ← needs seeding before demo
-processing_queue: 4,000  (492 done, 3,508 pending)
-search_queries:    19
+processing_queue: (check via API)
+search_queries:    19+
 ```
 
-Processing at ~3 samples/min with worker running. ~20 hours of worker time to
-drain the full queue. Run `curl http://localhost:8000/api/admin/queue` to check.
+Run `curl http://localhost:8000/api/admin/queue` for live counts.
 
 ---
 
@@ -456,6 +456,9 @@ JWT Bearer token scheme. Tokens are HS256-signed with `SECRET_KEY`.
 **Flow:**
 1. `POST /api/auth/register` — creates user, returns `UserOut` (no token)
 2. `POST /api/auth/token` — OAuth2 password form; returns `{"access_token": "...", "token_type": "bearer"}`
+   **Important:** The `username` field in the OAuth2 form must be the user's **email**, not their username.
+   The backend looks up users by email. The login page uses `type="email"` and the frontend
+   `authStore` passes `email` (not `username`) to `apiLogin` after registration.
 3. Include `Authorization: Bearer <token>` header on protected endpoints
 
 **Dependencies in `app/deps.py`:**
@@ -717,8 +720,10 @@ This endpoint is defined in `app/main.py` as `GET /api/admin/queue`.
 - **CLAP hangs on very short audio** (< ~0.1 s at 48 kHz). Samples stuck in
   `processing` for > 5 min are likely very short clips. See LESSONS.md §8.
   The stale-detection mechanism in `process_queue.py` will eventually reset these.
-- **MusiCNN returns `[]` for audio < 3 s** (musicnn's analysis window). This is
-  by design — the UnboundLocalError is caught and treated as "no tags".
+- **MusiCNN returns `[]` for audio < 3 s** (musicnn's analysis window). The subprocess
+  now checks duration via `librosa.get_duration()` *before* importing musicnn/TF,
+  so short clips bail out cleanly without risking a `BrokenProcessPool` crash.
+  See LESSONS.md §25.
 - **`samples.file_size_bytes` is the Freesound original file size**, not the stored
   MP3 preview. Do not use it to estimate Supabase Storage usage — it reads orders
   of magnitude too high. Actual previews are ~150–300 KB each. See LESSONS.md §19.
