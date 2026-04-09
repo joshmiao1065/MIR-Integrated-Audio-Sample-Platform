@@ -1,4 +1,5 @@
 import concurrent.futures
+import io
 import logging
 import multiprocessing
 import os
@@ -47,23 +48,15 @@ def _predict_subprocess(tmp_path: str, top_k: int) -> list[str]:
 
     Importing musicnn.tagger here calls tf.compat.v1.disable_eager_execution()
     only inside this subprocess, leaving the parent process's TF state intact.
+
+    IMPORTANT: Do NOT import librosa (or any library that loads numpy/scipy
+    extension modules) before importing musicnn/TF here.  Doing so causes a
+    segfault in libprotobuf.so inside TF — the shared-library initialisation
+    order conflicts.  The duration guard lives in the parent process instead
+    (MusiCNNWorker.predict), where librosa is already safely loaded.
     """
     import os as _os
     _os.environ.setdefault("TF_USE_LEGACY_KERAS", "1")
-
-    # Guard: musicnn needs >= 3 s of audio.  For very short clips (< a few
-    # hundred ms) TF/numpy crash at a level below Python exceptions, which
-    # kills the subprocess process entirely and causes BrokenProcessPool in
-    # the parent — even after the UnboundLocalError guard below.  Check
-    # duration with librosa before importing musicnn so we can bail out
-    # cleanly without touching TF at all.
-    import librosa
-    try:
-        duration = librosa.get_duration(path=tmp_path)
-        if duration < 3.0:
-            return []
-    except Exception:
-        pass  # if duration check fails, fall through and let musicnn try
 
     from musicnn.tagger import top_tags  # type: ignore[import]
 
@@ -103,6 +96,20 @@ class MusiCNNWorker:
             List of tag name strings ordered by confidence, e.g.
             ['guitar', 'classical', 'slow', 'strings', 'not rock'].
         """
+        # Duration guard — musicnn needs >= 3 s of audio.  Check here in the
+        # parent process using soundfile (fast header read, no TF involved).
+        # Do NOT do this inside the subprocess: importing librosa before TF in
+        # a spawned process causes a libprotobuf segfault (see LESSONS.md §27).
+        try:
+            import soundfile as sf
+            with sf.SoundFile(io.BytesIO(audio_bytes)) as f:
+                duration = len(f) / f.samplerate
+            if duration < 3.0:
+                log.debug("Audio too short for MusiCNN (%.1fs < 3.0s) — skipping.", duration)
+                return []
+        except Exception:
+            pass  # unknown format / can't read header — let musicnn try
+
         with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as tmp:
             tmp.write(audio_bytes)
             tmp_path = tmp.name

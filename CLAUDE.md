@@ -57,7 +57,7 @@ Agents should be aware of outstanding requirements when suggesting work.
 | Individual effort | ✅ | Solo project |
 | 10–15 tables | ✅ | 16 tables implemented |
 | Authentication | ✅ | JWT, bcrypt, register/login, Bearer tokens, ownership guards |
-| **Cloud deployment** | ⚠️ **PARTIAL** | Frontend deployed at `https://mirintegratedaudiosampleplatform-joshmiao.disent.com`; backend not yet on Railway — see Deployment section |
+| **Cloud deployment** | ❌ **NOT DONE** | Biggest remaining gap — see Deployment section below |
 | Alembic migrations | ✅ | Async runner; no raw SQL fixes |
 | External integration | ✅ | Freesound API, Supabase Storage, CLAP, YAMNet, MusiCNN |
 | Data seed / scraper | ✅ | 4,000 samples from Freesound; overnight batch ingestion |
@@ -114,10 +114,10 @@ All vars from `.env`: `DATABASE_URL`, `SUPABASE_URL`, `SUPABASE_ANON_KEY`,
 `ACCESS_TOKEN_EXPIRE_MINUTES`, `GDRIVE_FOLDER_ID`, `GDRIVE_CLIENT_ID`,
 `GDRIVE_CLIENT_SECRET`, `GDRIVE_REFRESH_TOKEN`. Do NOT commit `.env` to git.
 
-### CORS — already updated
-`app/main.py` now allows both `http://localhost:5173` (dev) and
-`https://mirintegratedaudiosampleplatform-joshmiao.disent.com` (production frontend).
-No further CORS change needed unless the frontend domain changes.
+### CORS update required before deployment
+`app/main.py` currently allows `http://localhost:5173` (dev) and a placeholder
+production origin. Update `allow_origins` in `app/main.py` with the real Vercel URL
+before deploying.
 
 ### Frontend env var
 Set `VITE_API_URL` in Vercel's environment settings to the Railway backend URL.
@@ -720,10 +720,10 @@ This endpoint is defined in `app/main.py` as `GET /api/admin/queue`.
 - **CLAP hangs on very short audio** (< ~0.1 s at 48 kHz). Samples stuck in
   `processing` for > 5 min are likely very short clips. See LESSONS.md §8.
   The stale-detection mechanism in `process_queue.py` will eventually reset these.
-- **MusiCNN returns `[]` for audio < 3 s** (musicnn's analysis window). The subprocess
-  now checks duration via `librosa.get_duration()` *before* importing musicnn/TF,
-  so short clips bail out cleanly without risking a `BrokenProcessPool` crash.
-  See LESSONS.md §25.
+- **MusiCNN returns `[]` for audio < 3 s** (musicnn's analysis window). Duration is
+  checked in the **parent process** using `soundfile` before the temp file is written;
+  the subprocess stays TF-only. See LESSONS.md §25 for why importing librosa before TF
+  in a `spawn` subprocess causes a `libprotobuf` segfault → `BrokenProcessPool`.
 - **`samples.file_size_bytes` is the Freesound original file size**, not the stored
   MP3 preview. Do not use it to estimate Supabase Storage usage — it reads orders
   of magnitude too high. Actual previews are ~150–300 KB each. See LESSONS.md §19.
