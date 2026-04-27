@@ -18,6 +18,7 @@ export function Navbar() {
       <div className="nav-links">
         <Link to="/">Browse</Link>
         {username && <Link to="/collections">Collections</Link>}
+        {username && <Link to="/upload">Upload</Link>}
         {username ? (
           <>
             <span className="nav-username">{username}</span>

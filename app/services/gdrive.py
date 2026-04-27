@@ -112,7 +112,11 @@ def _service():
     return build("drive", "v3", credentials=creds)
 
 
-def upload_audio(audio_bytes: bytes, filename: str) -> tuple[str, str]:
+def upload_audio(
+    audio_bytes: bytes,
+    filename: str,
+    mimetype: str = "audio/mpeg",
+) -> tuple[str, str]:
     """Upload audio bytes to the configured Google Drive folder.
 
     The file is immediately made publicly readable so the frontend can stream it.
@@ -120,9 +124,11 @@ def upload_audio(audio_bytes: bytes, filename: str) -> tuple[str, str]:
     Parameters
     ----------
     audio_bytes : bytes
-        Raw audio data (MP3 or any format supported by the Drive API).
+        Raw audio data (any format supported by Drive).
     filename : str
         Destination filename in Drive (e.g. ``"freesound-12345.mp3"``).
+    mimetype : str
+        MIME type for the uploaded file. Defaults to ``"audio/mpeg"``.
 
     Returns
     -------
@@ -138,7 +144,7 @@ def upload_audio(audio_bytes: bytes, filename: str) -> tuple[str, str]:
     if settings.GDRIVE_FOLDER_ID:
         file_metadata["parents"] = [settings.GDRIVE_FOLDER_ID]
 
-    media = MediaInMemoryUpload(audio_bytes, mimetype="audio/mpeg", resumable=False)
+    media = MediaInMemoryUpload(audio_bytes, mimetype=mimetype, resumable=False)
     uploaded = (
         svc.files()
         .create(

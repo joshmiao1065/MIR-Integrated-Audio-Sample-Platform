@@ -1,22 +1,27 @@
 import asyncio
 import logging
+import re
 import uuid
 from datetime import datetime, timezone
-from typing import List
+from pathlib import Path
+from typing import List, Optional
 
 import httpx
-from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
+from fastapi import APIRouter, Depends, File, Form, HTTPException, BackgroundTasks, UploadFile
 from sqlalchemy import delete, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.database import get_db, AsyncSessionLocal
+from app.deps import get_current_user
 from app.models.audio_embedding import AudioEmbedding
 from app.models.audio_metadata import AudioMetadata
 from app.models.sample import Sample
 from app.models.system import ProcessingQueue, ProcessingStatus
 from app.models.tag import Tag, SampleTag
+from app.models.user import User
 from app.schemas.sample import SampleOut, SampleCreate
+from app.services import gdrive
 from app.workers import registry
 from app.workers.librosa_worker import extract_features
 
@@ -90,6 +95,88 @@ async def create_sample(
     # _run_mir_pipeline will atomically claim this entry before starting work.
     # If process_queue or the overnight script claims it first, the background
     # task exits silently — no double processing, no race.
+    background_tasks.add_task(_run_mir_pipeline, sample.id)
+    return sample
+
+
+# ── Upload constants ──────────────────────────────────────────────────────────
+
+_ALLOWED_EXTENSIONS = {".mp3", ".wav", ".ogg", ".flac", ".aiff", ".m4a"}
+_MIME_BY_EXT = {
+    ".mp3": "audio/mpeg",
+    ".wav": "audio/wav",
+    ".ogg": "audio/ogg",
+    ".flac": "audio/flac",
+    ".aiff": "audio/aiff",
+    ".m4a": "audio/mp4",
+}
+_MAX_UPLOAD_BYTES = 50 * 1024 * 1024  # 50 MB
+
+
+@router.post("/upload", response_model=SampleOut, status_code=201)
+async def upload_sample(
+    background_tasks: BackgroundTasks,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    file: UploadFile = File(...),
+    title: Optional[str] = Form(None),
+):
+    """
+    Upload an audio file directly and queue it for MIR processing.
+
+    Accepts multipart/form-data with:
+      - file  : audio file (MP3, WAV, OGG, FLAC, AIFF, M4A; max 50 MB)
+      - title : optional display name; defaults to the filename stem
+
+    The file is stored on Google Drive.  MIR tags/BPM/embedding are generated
+    asynchronously — the sample appears immediately with is_processed=False.
+    """
+    ext = Path(file.filename or "").suffix.lower()
+    if ext not in _ALLOWED_EXTENSIONS:
+        raise HTTPException(
+            status_code=415,
+            detail=f"Unsupported file type '{ext}'. Accepted: {', '.join(sorted(_ALLOWED_EXTENSIONS))}",
+        )
+
+    audio_bytes = await file.read()
+    if not audio_bytes:
+        raise HTTPException(status_code=400, detail="Empty file")
+    if len(audio_bytes) > _MAX_UPLOAD_BYTES:
+        raise HTTPException(status_code=413, detail="File too large (max 50 MB)")
+
+    # Build a safe Drive filename: keep only word chars, hyphens, dots.
+    stem = Path(file.filename or "upload").stem
+    safe_stem = re.sub(r"[^\w\-]", "_", stem)[:40]
+    drive_filename = f"user-{safe_stem}-{uuid.uuid4().hex[:8]}{ext}"
+    mime = _MIME_BY_EXT.get(ext, "audio/mpeg")
+
+    clean_title = (title.strip() if title and title.strip() else stem)[:255]
+
+    loop = asyncio.get_running_loop()
+    try:
+        gdrive_file_id, public_url = await loop.run_in_executor(
+            None, gdrive.upload_audio, audio_bytes, drive_filename, mime
+        )
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=f"Storage not configured: {exc}")
+    except Exception:
+        log.exception("Google Drive upload failed for user upload")
+        raise HTTPException(status_code=502, detail="Storage upload failed — please try again")
+
+    sample = Sample(
+        title=clean_title,
+        file_url=public_url,
+        gdrive_file_id=gdrive_file_id,
+        mime_type=mime,
+        file_size_bytes=len(audio_bytes),
+        user_id_owner=current_user.id,
+    )
+    db.add(sample)
+    await db.flush()
+    db.add(ProcessingQueue(sample_id=sample.id, status=ProcessingStatus.pending))
+    await db.commit()
+    await db.refresh(sample)
+
     background_tasks.add_task(_run_mir_pipeline, sample.id)
     return sample
 

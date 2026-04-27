@@ -414,6 +414,61 @@ main { max-width: 1100px; margin: 0 auto; padding: 1.5rem 1rem; }
 .collection-desc { font-size: 0.8rem; color: var(--text-muted); margin-top: 0.3rem; }
 .collection-samples { margin-top: 1rem; }
 
+/* ── Upload page ──────────────────────────────────────────── */
+.upload-card { max-width: 500px; }
+.upload-drop-zone {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  border: 2px dashed var(--border);
+  border-radius: var(--radius);
+  padding: 2rem 1rem;
+  margin: 1rem 0;
+  color: var(--text-muted);
+  cursor: pointer;
+  text-align: center;
+  transition: border-color 0.15s, color 0.15s, background 0.15s;
+  font-size: 0.9rem;
+  min-height: 120px;
+}
+.upload-drop-zone:hover,
+.upload-drop-zone.dragging {
+  border-color: var(--accent);
+  color: var(--text);
+  background: color-mix(in srgb, var(--accent) 6%, transparent);
+}
+.upload-drop-zone.has-file {
+  border-color: var(--success);
+  color: var(--success);
+}
+.upload-icon { font-size: 1.8rem; opacity: 0.5; }
+.upload-hint { font-size: 0.72rem; opacity: 0.6; letter-spacing: 0.03em; }
+.upload-filename { font-weight: 600; word-break: break-all; }
+.upload-filesize { font-size: 0.78rem; }
+.upload-optional { color: var(--text-muted); font-size: 0.75rem; font-weight: 400; }
+.upload-success-msg { color: var(--text-muted); font-size: 0.9rem; margin: 0.75rem 0 1.25rem; line-height: 1.6; }
+.upload-view-btn {
+  display: block;
+  text-align: center;
+  padding: 0.65em;
+  font-size: 0.95rem;
+  background: var(--accent);
+  color: #fff;
+  border-radius: var(--radius);
+  margin-bottom: 0.6rem;
+}
+.upload-view-btn:hover { background: var(--accent-hover); color: #fff; }
+.upload-again-btn {
+  display: block;
+  width: 100%;
+  background: var(--surface2);
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+}
+.upload-again-btn:hover { color: var(--text); border-color: var(--accent); }
+
 /* ── Misc ─────────────────────────────────────────────────── */
 .loading { text-align: center; color: var(--text-muted); padding: 3rem; }
 .empty { color: var(--text-muted); font-size: 0.9rem; }

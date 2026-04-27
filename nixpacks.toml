@@ -1,0 +1,6 @@
+# Use requirements-railway.txt instead of requirements.txt.
+# This installs CPU-only PyTorch (~175 MB vs ~2.5 GB CUDA wheel) and omits
+# TensorFlow/YAMNet/MusiCNN — those only run in the local process_queue worker,
+# not on Railway.
+[phases.install]
+cmds = ["pip install -r requirements-railway.txt"]

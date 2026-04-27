@@ -1,6 +1,14 @@
 import { api } from "./client";
 import type { Sample, Comment, RatingStats, DownloadStats } from "../types";
 
+export async function uploadSample(file: File, title?: string): Promise<Sample> {
+  const form = new FormData();
+  form.append("file", file);
+  if (title) form.append("title", title);
+  const res = await api.post<Sample>("/samples/upload", form);
+  return res.data;
+}
+
 export async function listSamples(limit = 20, offset = 0): Promise<Sample[]> {
   const res = await api.get<Sample[]>("/samples/", { params: { limit, offset } });
   return res.data;

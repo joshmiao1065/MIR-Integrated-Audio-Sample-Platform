@@ -40,5 +40,10 @@ class Settings(BaseSettings):
     # Refresh token produced by scripts/gdrive_auth.py — never expires unless revoked.
     GDRIVE_REFRESH_TOKEN: Optional[str] = None
 
+    # CORS allowed origins — comma-separated list.
+    # Local dev: "http://localhost:5173"
+    # Production: "http://localhost:5173,https://your-app.vercel.app"
+    ALLOWED_ORIGINS: str = "http://localhost:5173"
+
 
 settings = Settings()

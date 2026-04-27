@@ -2,6 +2,7 @@ from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import func, select
 
+from app.config import settings
 from app.database import get_db
 from app.models.system import ProcessingQueue
 from app.routers import auth, samples, search, collections, social
@@ -12,12 +13,10 @@ app = FastAPI(
     version="0.1.0",
 )
 
+_origins = [o.strip() for o in settings.ALLOWED_ORIGINS.split(",") if o.strip()]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:5173",  # Vite dev server
-        "https://mirintegratedaudiosampleplatform-joshmiao.disent.com",
-    ],
+    allow_origins=_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

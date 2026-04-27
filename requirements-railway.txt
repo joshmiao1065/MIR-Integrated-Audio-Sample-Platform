@@ -1,0 +1,49 @@
+# Railway-specific requirements.
+#
+# Two key differences from requirements.txt:
+#   1. CPU-only PyTorch via the PyTorch wheel index (~175 MB vs ~2.5 GB CUDA build).
+#      Railway has no GPU; the CUDA build would time out the build step.
+#   2. No TensorFlow / YAMNet / MusiCNN. Those workers only run in the local
+#      process_queue worker. Railway only needs CLAP for text/audio search.
+#
+# Install path (handled automatically by nixpacks.toml):
+#   pip install -r requirements-railway.txt
+
+# ── Web framework + database ──────────────────────────────────────────────────
+fastapi==0.111.0
+uvicorn[standard]==0.29.0
+python-multipart==0.0.9
+sqlalchemy==2.0.30
+alembic==1.13.1
+asyncpg==0.29.0
+pgvector==0.3.2
+
+# ── Config + validation ───────────────────────────────────────────────────────
+pydantic==2.7.1
+pydantic-settings==2.3.0
+python-dotenv==1.0.1
+
+# ── HTTP + storage ────────────────────────────────────────────────────────────
+supabase==2.4.6
+httpx==0.27.0
+google-api-python-client>=2.130.0
+google-auth>=2.29.0
+google-auth-oauthlib>=1.2.0
+
+# ── Auth ──────────────────────────────────────────────────────────────────────
+python-jose[cryptography]==3.3.0
+passlib[bcrypt]==1.7.4
+bcrypt==4.0.1
+
+# ── Audio processing (required by CLAP for resampling) ────────────────────────
+librosa==0.10.2
+soundfile==0.12.1
+numpy>=1.26.0,<2.0
+setuptools<71
+
+# ── CLAP — semantic search (CPU-only wheels, no CUDA runtime needed) ──────────
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch==2.3.0+cpu
+torchvision==0.18.0+cpu
+transformers==4.41.2
+laion-clap==1.1.7
