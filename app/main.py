@@ -1,6 +1,3 @@
-import asyncio
-import logging
-
 from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import func, select
@@ -9,9 +6,6 @@ from app.config import settings
 from app.database import get_db
 from app.models.system import ProcessingQueue
 from app.routers import auth, samples, search, collections, social
-from app.workers import registry
-
-log = logging.getLogger(__name__)
 
 app = FastAPI(
     title="Audio Sample Manager",
@@ -33,19 +27,6 @@ app.include_router(samples.router,     prefix="/api/samples",     tags=["samples
 app.include_router(social.router,      prefix="/api/samples",     tags=["social"])
 app.include_router(search.router,      prefix="/api/search",      tags=["search"])
 app.include_router(collections.router, prefix="/api/collections",  tags=["collections"])
-
-
-@app.on_event("startup")
-async def _warmup_clap():
-    """Pre-load CLAP weights in a background thread so the first search request is fast.
-    Any failure is logged prominently — check Railway startup logs if search returns 503."""
-    loop = asyncio.get_running_loop()
-    try:
-        await loop.run_in_executor(None, registry.clap)
-        log.info("CLAP warm-up complete")
-    except Exception as exc:
-        log.error("CLAP failed to load at startup (%s: %s) — search endpoints will return 503",
-                  type(exc).__name__, exc)
 
 
 @app.get("/health", tags=["meta"])
