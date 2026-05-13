@@ -17,8 +17,8 @@
 
 set -euo pipefail
 
-echo "==> Installing requirements.txt (pip resolver)"
-pip install -r requirements.txt
+echo "==> Installing requirements-dev.txt (pip resolver)"
+pip install -r requirements-dev.txt
 
 echo "==> Installing musicnn 0.1.0 with --no-deps (numpy pin bypass)"
 pip install --no-deps musicnn==0.1.0
