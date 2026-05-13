@@ -15,8 +15,9 @@ Social endpoints nested under /api/samples/{sample_id}/:
 import uuid
 from typing import List, Optional
 
+import httpx
 from fastapi import APIRouter, Depends, HTTPException, Response, status
-from fastapi.responses import RedirectResponse
+from fastapi.responses import RedirectResponse, StreamingResponse
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -188,6 +189,28 @@ async def download_sample(
     ))
     await db.commit()
     return RedirectResponse(url=sample.file_url, status_code=status.HTTP_302_FOUND)
+
+
+@router.get("/{sample_id}/stream")
+async def stream_sample(
+    sample_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+):
+    """Proxy audio from storage so the browser can stream it without CORS issues."""
+    sample = await _require_sample(sample_id, db)
+    file_url = sample.file_url  # capture before session closes
+
+    async def _generate():
+        async with httpx.AsyncClient(follow_redirects=True, timeout=30) as client:
+            async with client.stream("GET", file_url) as resp:
+                async for chunk in resp.aiter_bytes(chunk_size=16_384):
+                    yield chunk
+
+    return StreamingResponse(
+        _generate(),
+        media_type="audio/mpeg",
+        headers={"Accept-Ranges": "bytes", "Cache-Control": "public, max-age=3600"},
+    )
 
 
 @router.get("/{sample_id}/downloads", response_model=DownloadStats)

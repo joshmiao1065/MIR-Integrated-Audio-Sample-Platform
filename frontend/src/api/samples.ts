@@ -70,3 +70,8 @@ export function downloadUrl(sampleId: string): string {
   const base = import.meta.env.VITE_API_URL ?? "http://localhost:8000";
   return `${base}/api/samples/${sampleId}/download`;
 }
+
+export function streamUrl(sampleId: string): string {
+  const base = import.meta.env.VITE_API_URL ?? "http://localhost:8000";
+  return `${base}/api/samples/${sampleId}/stream`;
+}

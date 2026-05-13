@@ -9,6 +9,7 @@ import {
   submitRating,
   getDownloadStats,
   downloadUrl,
+  streamUrl,
 } from "../api/samples";
 import { addToCollection, listCollections } from "../api/collections";
 import { WavePlayer } from "../components/WavePlayer";
@@ -92,7 +93,7 @@ export function SamplePage() {
 
       <h1 className="sample-title-large">{sample.title}</h1>
 
-      <WavePlayer url={sample.file_url} />
+      <WavePlayer url={streamUrl(sample.id)} />
 
       <div className="sample-actions">
         <a
