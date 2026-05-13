@@ -54,7 +54,11 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import httpx
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
+from sqlalchemy.pool import NullPool
 
+import app.database as _db_module
+import app.routers.samples as _samples_module
 from app.database import AsyncSessionLocal, engine
 from app.models.sample import Sample
 from app.models.system import ProcessingQueue, ProcessingStatus
@@ -73,6 +77,52 @@ logging.basicConfig(
     ],
 )
 log = logging.getLogger(__name__)
+
+# ── Direct-connection engine (bypasses PgBouncer) ────────────────────────────
+#
+# asyncpg names prepared statements __asyncpg_stmt_N__ (hex counter per
+# connection).  Two concurrent connections that happen to be at the same N
+# are both routed by PgBouncer (transaction mode) to the same PostgreSQL
+# backend → DuplicatePreparedStatementError.  Even statement_cache_size=0
+# doesn't help because asyncpg still creates NAMED statements; the cache
+# setting only controls reuse, not naming.
+#
+# The fix: bypass PgBouncer entirely for scripts by swapping the pooler port
+# (6543) for the direct PostgreSQL port (5432).  Each asyncpg connection then
+# talks to a dedicated backend → statement names never collide.
+# NullPool ensures we never reuse connections across sessions.
+
+def _install_direct_engine() -> None:
+    """Patch app.database and app.routers.samples to use a direct PG connection."""
+    from app.config import settings
+    global AsyncSessionLocal, engine  # update names used by _ingest_page etc.
+
+    url = settings.DATABASE_URL.replace(":6543/", ":5432/")
+    direct_engine = create_async_engine(
+        url,
+        echo=False,
+        poolclass=NullPool,
+        connect_args={"statement_cache_size": 0},
+    )
+    direct_session = async_sessionmaker(
+        direct_engine, expire_on_commit=False, class_=AsyncSession
+    )
+
+    # Update module-level names used within this script
+    engine = direct_engine
+    AsyncSessionLocal = direct_session
+
+    # Update the session factory used by _run_mir_pipeline (imported by name
+    # into app.routers.samples at startup, so we must patch that module too)
+    _db_module.engine = direct_engine
+    _db_module.AsyncSessionLocal = direct_session
+    _samples_module.AsyncSessionLocal = direct_session
+
+    log.info(
+        "Using direct PostgreSQL connection (bypassing PgBouncer): %s",
+        url.split("@")[-1],  # log host:port/db only, not credentials
+    )
+
 
 # ── State file ────────────────────────────────────────────────────────────────
 
@@ -512,6 +562,10 @@ async def _consumer(pipeline_queue: asyncio.Queue) -> None:
 # ── Main ──────────────────────────────────────────────────────────────────────
 
 async def run(max_requests: int, max_per_query: int, reset: bool, process_inline: bool) -> None:
+    # Bypass PgBouncer for this script to eliminate DuplicatePreparedStatementError.
+    # Must be called before any DB session is opened.
+    _install_direct_engine()
+
     state = _get_state(reset)
     _save_state(state)
 
@@ -544,15 +598,6 @@ async def run(max_requests: int, max_per_query: int, reset: bool, process_inline
 
         loop.add_signal_handler(signal.SIGINT, _sigint_handler)
         loop.add_signal_handler(signal.SIGTERM, _sigint_handler)
-
-        # Pre-warm one pool connection so SQLAlchemy's asyncpg dialect
-        # initialization (select pg_catalog.version()) runs single-threaded
-        # before both tasks start.  Without this, asyncio.gather causes two
-        # concurrent connections through PgBouncer to the same PostgreSQL
-        # backend connection; both try to create the named prepared statement
-        # "__asyncpg_stmt_1__", raising DuplicatePreparedStatementError.
-        async with engine.connect() as _conn:
-            pass
 
         # Run producer and consumer concurrently.
         # If the producer is interrupted, it puts a _DONE sentinel and returns;
