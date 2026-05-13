@@ -28,6 +28,7 @@ Usage:
 
 import argparse
 import asyncio
+import hashlib
 import json
 import logging
 import random
@@ -495,9 +496,11 @@ async def _main(args: argparse.Namespace) -> None:
     fake = Faker()
     fake.seed_instance(args.seed)
 
-    # Hash password once before opening the session (bcrypt is slow)
+    # Hash password once before opening the session (bcrypt is slow).
+    # Must match auth.py: bcrypt(sha256(password)) — same prehash used at login.
     log.info("Hashing seed password…")
-    pw_hash = _bcrypt.hash("demo1234")
+    _prehashed = hashlib.sha256(b"demo1234").hexdigest()
+    pw_hash = _bcrypt.hash(_prehashed)
 
     # Phase 1: create/fetch users + query sample pool
     async with AsyncSessionLocal() as db:
