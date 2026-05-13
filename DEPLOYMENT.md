@@ -109,10 +109,27 @@ until after the frontend deploy. See §5.
 
 ### 3.4  Deploy
 
+Railway is connected to the GitHub repo (`joshmiao1065/MIR-Integrated-Audio-Sample-Platform`).
+Every push to `main` triggers an automatic deploy — no CLI command needed.
+
 ```bash
 # From audio-sample-manager/
-railway up
+git push origin main   # Railway auto-deploys from GitHub
 ```
+
+**Do not use `railway up` from a WSL path on Windows** (e.g. `/mnt/c/…`).
+The CLI uploads files directly from the filesystem and will include
+`__pycache__/*.pyc` binaries even if they are in `.gitignore`, because
+`railway up` only respects `.railwayignore`. Those `.pyc` files land next
+to the `.py` sources on Railway and cause:
+
+```
+SyntaxError: source code string cannot contain null bytes
+```
+
+A `.railwayignore` is committed to the repo as a safety net, but the
+GitHub-based deploy is always preferred — Railway pulls clean git content
+directly, bypassing the local filesystem entirely.
 
 Railway detects Python via `requirements.txt`, then `nixpacks.toml` overrides
 the install command to use `requirements-railway.txt` (CPU-only torch, no TF).
