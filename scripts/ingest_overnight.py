@@ -372,7 +372,10 @@ async def _producer(
                         )
                     )
                     await db.commit()
-                    await db.refresh(sample)
+                    # No db.refresh() here: expire_on_commit=False keeps attributes
+                    # valid, and db.flush() already populated sample.id via RETURNING.
+                    # A post-commit SELECT would cross a PgBouncer transaction boundary
+                    # and trigger InvalidSQLStatementNameError.
                     query_ingested[0] += 1
                     state["total_ingested"] += 1
                     log.info(
