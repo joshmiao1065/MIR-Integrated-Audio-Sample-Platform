@@ -25,3 +25,19 @@ api.interceptors.response.use(
     return Promise.reject(err);
   }
 );
+
+/**
+ * Returns a fresh axios instance for search requests.
+ * Reads `search_api_url` from localStorage at call time so the URL can be
+ * changed in the browser console without a page rebuild:
+ *   localStorage.setItem("search_api_url", "https://xxxx.ngrok-free.app")
+ * Omit or clear the key to fall back to the default Railway backend.
+ */
+export function createSearchApi() {
+  const override = localStorage.getItem("search_api_url");
+  const base = override ?? BASE_URL;
+  const instance = axios.create({ baseURL: `${base}/api` });
+  const token = localStorage.getItem("access_token");
+  if (token) instance.defaults.headers.common["Authorization"] = `Bearer ${token}`;
+  return instance;
+}

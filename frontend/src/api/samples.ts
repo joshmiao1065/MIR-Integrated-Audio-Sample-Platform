@@ -1,4 +1,4 @@
-import { api } from "./client";
+import { api, createSearchApi } from "./client";
 import type { Sample, Comment, RatingStats, DownloadStats } from "../types";
 
 export async function uploadSample(file: File, title?: string): Promise<Sample> {
@@ -20,7 +20,7 @@ export async function getSample(id: string): Promise<Sample> {
 }
 
 export async function textSearch(query: string, limit = 20, offset = 0): Promise<Sample[]> {
-  const res = await api.post<{ results: Sample[] }>("/search/text", {
+  const res = await createSearchApi().post<{ results: Sample[] }>("/search/text", {
     query,
     limit,
     offset,
@@ -32,7 +32,7 @@ export async function audioSearch(file: File, limit = 20): Promise<Sample[]> {
   const form = new FormData();
   form.append("file", file);
   form.append("limit", String(limit));
-  const res = await api.post<{ results: Sample[] }>("/search/audio", form, {
+  const res = await createSearchApi().post<{ results: Sample[] }>("/search/audio", form, {
     headers: { "Content-Type": "multipart/form-data" },
   });
   return res.data.results;
