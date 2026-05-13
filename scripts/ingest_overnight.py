@@ -55,7 +55,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 import httpx
 from sqlalchemy import select
 
-from app.database import AsyncSessionLocal
+from app.database import AsyncSessionLocal, engine
 from app.models.sample import Sample
 from app.models.system import ProcessingQueue, ProcessingStatus
 from app.routers.samples import _run_mir_pipeline
@@ -541,6 +541,15 @@ async def run(max_requests: int, max_per_query: int, reset: bool, process_inline
 
         loop.add_signal_handler(signal.SIGINT, _sigint_handler)
         loop.add_signal_handler(signal.SIGTERM, _sigint_handler)
+
+        # Pre-warm one pool connection so SQLAlchemy's asyncpg dialect
+        # initialization (select pg_catalog.version()) runs single-threaded
+        # before both tasks start.  Without this, asyncio.gather causes two
+        # concurrent connections through PgBouncer to the same PostgreSQL
+        # backend connection; both try to create the named prepared statement
+        # "__asyncpg_stmt_1__", raising DuplicatePreparedStatementError.
+        async with engine.connect() as _conn:
+            pass
 
         # Run producer and consumer concurrently.
         # If the producer is interrupted, it puts a _DONE sentinel and returns;
