@@ -175,12 +175,21 @@ vercel login
 
 ### 4.2  Set the API URL
 
-```bash
-# In frontend/
-echo "VITE_API_URL=https://audio-sample-manager-production.up.railway.app" > .env.production
+`frontend/.env.production` is committed to the repository and already contains:
+
+```
+VITE_API_URL=https://audio-sample-manager-production.up.railway.app
 ```
 
-Or set it as an environment variable in the Vercel dashboard after first deploy.
+Vite reads this file automatically during production builds — no Vercel dashboard
+configuration is needed.  **Do not set `VITE_API_URL` as a Vercel env var** unless
+you intend to override the committed value; if both exist the Vercel dashboard value
+takes precedence.
+
+> **Why this matters:** `VITE_API_URL` is baked into the JS bundle at compile time.
+> If it is absent during the build, Vite falls back to `http://localhost:8000` and
+> every API call fails silently in the browser.  You can confirm what URL is baked in
+> by fetching the deployed JS bundle and grepping for URLs (see LESSONS.md §33).
 
 ### 4.3  Deploy
 
@@ -416,8 +425,10 @@ Orphaned side effects (harmless):
 | Symptom | Where to look | Likely cause |
 |---|---|---|
 | Build fails | Railway → Deployments → Build logs | Missing package, pip resolver conflict |
+| `SyntaxError: source code string cannot contain null bytes` | Railway → Deploy logs | `__pycache__/*.pyc` uploaded by `railway up` from WSL — deploy via `git push` instead (see LESSONS.md §32) |
 | 502 on startup | Railway → Deployments → Deploy logs | Missing env var, GDrive misconfigured |
 | Search returns empty | Railway → Deployments → Deploy logs | CLAP weights not downloaded; check `laion_clap` startup log |
+| CORS 400 on preflight despite `ALLOWED_ORIGINS` being set | Check the raw variable value | Line break embedded in the URL string (re-type, don't paste — see LESSONS.md §35) |
 | CORS error in browser | Browser console → Network tab | `ALLOWED_ORIGINS` doesn't include the Vercel URL |
 | Drive upload 503 | Railway logs | `GDRIVE_REFRESH_TOKEN` not set |
 
@@ -426,8 +437,9 @@ Orphaned side effects (harmless):
 | Symptom | Fix |
 |---|---|
 | Blank page on `/samples/123` (direct URL) | `vercel.json` rewrite rule is missing or wrong |
-| API calls fail (network error) | `VITE_API_URL` not set in Vercel env → app calls `localhost:8000` |
-| Old build still serving | `vercel --prod` again; check the deployment was assigned to Production |
+| No samples load; Railway logs show zero requests | `VITE_API_URL` baked as `localhost:8000` — check bundle (see LESSONS.md §33); `frontend/.env.production` must be committed |
+| "Authentication Required" redirect | Deployment Protection is enabled — disable in Settings → Deployment Protection (see LESSONS.md §34) |
+| Old build still serving | Push a new commit; Railway/Vercel GitHub integration will rebuild |
 
 ### Local worker
 
