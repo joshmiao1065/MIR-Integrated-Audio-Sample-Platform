@@ -135,6 +135,19 @@ main { max-width: 1100px; margin: 0 auto; padding: 1.5rem 1rem; }
   font-size: 0.85rem;
   color: var(--text-muted);
 }
+.search-error {
+  display: flex;
+  align-items: flex-start;
+  gap: 1rem;
+  margin-bottom: 1rem;
+  padding: 0.75rem 1rem;
+  background: #2a1515;
+  border: 1px solid #7f3f3f;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  color: #f87171;
+}
+.search-error span { flex: 1; }
 .clear-btn { background: var(--surface2); color: var(--text-muted); }
 
 /* ── Sample grid & card ───────────────────────────────────── */

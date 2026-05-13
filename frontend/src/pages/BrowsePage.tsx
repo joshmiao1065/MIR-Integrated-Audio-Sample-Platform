@@ -9,6 +9,7 @@ export function BrowsePage() {
   const [loading, setLoading] = useState(true);
   const [searched, setSearched] = useState(false);
   const [offset, setOffset] = useState(0);
+  const [searchError, setSearchError] = useState<string | null>(null);
   const LIMIT = 20;
 
   useEffect(() => {
@@ -28,11 +29,19 @@ export function BrowsePage() {
   const clearSearch = () => {
     setSearched(false);
     setOffset(0);
+    setSearchError(null);
   };
 
   return (
     <div className="page browse-page">
-      <SearchBar onResults={handleResults} onLoading={setLoading} />
+      <SearchBar onResults={handleResults} onLoading={setLoading} onError={setSearchError} />
+
+      {searchError && (
+        <div className="search-error">
+          <span>{searchError}</span>
+          <button onClick={() => setSearchError(null)} className="clear-btn">✕</button>
+        </div>
+      )}
 
       {searched && (
         <div className="search-status">

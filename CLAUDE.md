@@ -721,8 +721,9 @@ This endpoint is defined in `app/main.py` as `GET /api/admin/queue`.
 - **`processing_queue.updated_at`** has no PostgreSQL trigger — it always shows the insert time. Set it manually in code on status changes, or add a trigger via migration.
 - **No rate limiting** — consider `slowapi` for production.
 - **MusiCNN `predict` uses the MTT_musicnn model** (MagnaTagATune, ~50 tags). The MSD_musicnn model (Million Song Dataset, more tags) is also available — swap `model="MTT_musicnn"` in `musicnn_worker.py` if you want broader coverage.
-- **No audio upload to storage** — `POST /api/samples/` takes a `file_url` that must already be in Supabase Storage. There's no endpoint to upload the audio file itself. The ingestion script handles this for Freesound content.
+- **User audio upload** — `POST /api/samples/upload` (multipart) accepts MP3/WAV/OGG/FLAC/AIFF/M4A up to 50 MB, uploads to Google Drive, inserts the `Sample` row, and queues MIR processing. The frontend `/upload` route (UploadPage.tsx) provides drag-and-drop UI; the Upload link appears in the Navbar when logged in. The older `POST /api/samples/` still exists for programmatic creation but requires a pre-existing `file_url`.
 - **Librosa key detection** only returns the root note (C, C#, D…) — mode (major/minor) detection is a future enhancement noted in the code.
+- **Text/audio search is unavailable on Railway free tier.** CLAP needs ~900 MB; Railway's free tier gives 512 MB. The search endpoint loads CLAP on first call, which OOMs the process and causes Railway to return 502. The frontend now shows a clear error message instead of silently keeping the pre-search results. To use semantic search: run the backend locally (`uvicorn app.main:app --reload`) and hit `http://localhost:8000/docs`, or upgrade to Railway Starter ($5/mo, 8 GB RAM).
 - **CLAP hangs on very short audio** (< ~0.1 s at 48 kHz). Samples stuck in
   `processing` for > 5 min are likely very short clips. See LESSONS.md §8.
   The stale-detection mechanism in `process_queue.py` will eventually reset these.
