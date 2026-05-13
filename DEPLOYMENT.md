@@ -185,6 +185,8 @@ ensures all routes serve `index.html` (SPA routing).
 
 After deploy, Vercel prints a URL like `your-app.vercel.app`.
 
+**Live Vercel URL:** `https://audio-sample-manager-6ouyzyyoo-josh-miao-s-projects.vercel.app`
+
 ---
 
 ## 5. Wire CORS (two-pass)
@@ -195,7 +197,7 @@ allowed origins:
 In the Railway dashboard → **Variables**:
 
 ```
-ALLOWED_ORIGINS=http://localhost:5173,https://your-app.vercel.app
+ALLOWED_ORIGINS=http://localhost:5173,https://audio-sample-manager-6ouyzyyoo-josh-miao-s-projects.vercel.app
 ```
 
 Railway auto-redeploys on variable change.  Once it's live, open the Vercel

@@ -64,7 +64,7 @@ Agents should be aware of outstanding requirements when suggesting work.
 | ★ Complexity component | ✅✅✅ | Vector DB + 3 ML models + concurrent background pipeline |
 
 ### Deliverables still outstanding
-- **Live public URL** — backend deployed at `https://audio-sample-manager-production.up.railway.app`. Frontend (Vercel) still needed for a full public URL.
+- **Live public URL** — ✅ backend `https://audio-sample-manager-production.up.railway.app`, frontend `https://audio-sample-manager-6ouyzyyoo-josh-miao-s-projects.vercel.app`.
 - **Formal write-up** — project goals, architecture, 3-bug war room log, retrospective.
   Bug material is already documented in LESSONS.md §1–3 (PendingRollbackError,
   TF eager conflict, MusiCNN subprocess isolation).
@@ -85,7 +85,7 @@ pgvector HNSW index, and a three-session DB architecture to survive PgBouncer ti
 ## Deployment
 
 **Backend (Railway):** `https://audio-sample-manager-production.up.railway.app` — live and healthy.
-**Frontend (Vercel):** not yet deployed — needed to complete the public URL requirement.
+**Frontend (Vercel):** `https://audio-sample-manager-6ouyzyyoo-josh-miao-s-projects.vercel.app` — live.
 
 ### Target architecture
 - **Backend → Railway** (`uvicorn app.main:app`)
