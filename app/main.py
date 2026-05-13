@@ -17,6 +17,9 @@ _origins = [o.strip() for o in settings.ALLOWED_ORIGINS.split(",") if o.strip()]
 app.add_middleware(
     CORSMiddleware,
     allow_origins=_origins,
+    # Allow any Vercel preview/branch/alias URL for this project so we never
+    # have to update ALLOWED_ORIGINS when Vercel creates a new deployment URL.
+    allow_origin_regex=r"https://audio-sample-manager[a-zA-Z0-9-]*\.vercel\.app",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
