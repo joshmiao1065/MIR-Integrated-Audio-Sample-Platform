@@ -40,7 +40,12 @@ const SEARCH_BASE_URL = import.meta.env.VITE_SEARCH_URL ?? BASE_URL;
 export function createSearchApi() {
   const override = localStorage.getItem("search_api_url");
   const base = override ?? SEARCH_BASE_URL;
-  const instance = axios.create({ baseURL: `${base}/api` });
+  const instance = axios.create({
+    baseURL: `${base}/api`,
+    // ngrok free tier shows a browser-warning interstitial; this header bypasses it.
+    // Ignored by Railway and any non-ngrok backend.
+    headers: { "ngrok-skip-browser-warning": "1" },
+  });
   const token = localStorage.getItem("access_token");
   if (token) instance.defaults.headers.common["Authorization"] = `Bearer ${token}`;
   return instance;
