@@ -4,9 +4,3 @@
 # not on Railway.
 [phases.install]
 cmds = ["pip install -r requirements-railway.txt"]
-
-[phases.build]
-cmds = [
-  "python3 -c \"import sys; d=open('app/models/user.py','rb').read(); nulls=[i for i,b in enumerate(d) if b==0]; print('user.py size:', len(d), 'null bytes:', nulls[:5]); sys.exit(1 if nulls else 0)\"",
-  "python3 -c \"import app.models; print('app.models import OK')\""
-]

@@ -1,0 +1,10 @@
+# Force LF line endings for all text files — prevents CRLF corruption when
+# railway up archives from WSL/DrvFS where OneDrive stores files with CRLF.
+* text=auto eol=lf
+*.py text eol=lf
+*.toml text eol=lf
+*.txt text eol=lf
+*.json text eol=lf
+*.md text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
