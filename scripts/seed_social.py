@@ -46,6 +46,8 @@ except ImportError:
 
 from passlib.context import CryptContext
 from sqlalchemy import delete, select, text
+from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
+from sqlalchemy.pool import NullPool
 
 from app.database import AsyncSessionLocal
 from app.models.collection import Collection, CollectionItem
@@ -535,6 +537,19 @@ async def _main(args: argparse.Namespace) -> None:
         log.info("Remove seed data later with: python -m scripts.seed_social --clear")
 
 
+def _install_direct_engine() -> None:
+    """Bypass PgBouncer by connecting directly to Postgres port 5432.
+    PgBouncer (transaction mode) causes DuplicatePreparedStatementError when
+    asyncpg initialises the pool — same fix as ingest_overnight.py."""
+    global AsyncSessionLocal
+    from app.config import settings
+    url = settings.DATABASE_URL.replace(":6543/", ":5432/")
+    engine = create_async_engine(url, echo=False, poolclass=NullPool,
+                                 connect_args={"statement_cache_size": 0})
+    AsyncSessionLocal = async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
+    log.info("Using direct PG connection (bypassing PgBouncer): %s", url.split("@")[-1])
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--users",   type=int, default=10, help="Number of fake user accounts to create (default: 10)")
@@ -542,6 +557,8 @@ def main() -> None:
     parser.add_argument("--dry-run", action="store_true",   help="Print what would be inserted without touching the DB")
     parser.add_argument("--clear",   action="store_true",   help="Delete all seeded users and their data, then exit")
     args = parser.parse_args()
+    if not args.dry_run:
+        _install_direct_engine()
     asyncio.run(_main(args))
 
 

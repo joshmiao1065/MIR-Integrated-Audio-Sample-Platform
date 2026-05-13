@@ -57,6 +57,16 @@ async def _vector_search(
     return [by_id[sid] for sid in ordered_ids if sid in by_id]
 
 
+def _clap_encode_text(text: str) -> list[float]:
+    """Run inside a thread executor — initialises CLAP on first call."""
+    return registry.clap().encode_text(text)
+
+
+def _clap_encode_audio(audio_bytes: bytes) -> list[float]:
+    """Run inside a thread executor — initialises CLAP on first call."""
+    return registry.clap().encode_audio(audio_bytes)
+
+
 @router.post("/text", response_model=SearchResponse)
 async def search_by_text(
     payload: TextSearchRequest,
@@ -64,7 +74,10 @@ async def search_by_text(
     current_user: Optional[User] = Depends(get_optional_user),
 ):
     loop = asyncio.get_running_loop()
-    query_vector = await loop.run_in_executor(None, registry.clap().encode_text, payload.query)
+    try:
+        query_vector = await loop.run_in_executor(None, _clap_encode_text, payload.query)
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail=f"Search unavailable: {exc}")
     rows = await _vector_search(db, query_vector, payload.limit, payload.offset)
 
     samples = [SampleOut.model_validate(s) for s in rows]
@@ -92,7 +105,10 @@ async def search_by_audio(
 
     audio_bytes = await file.read()
     loop = asyncio.get_running_loop()
-    query_vector = await loop.run_in_executor(None, registry.clap().encode_audio, audio_bytes)
+    try:
+        query_vector = await loop.run_in_executor(None, _clap_encode_audio, audio_bytes)
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail=f"Search unavailable: {exc}")
     rows = await _vector_search(db, query_vector, limit, 0)
 
     samples = [SampleOut.model_validate(s) for s in rows]
