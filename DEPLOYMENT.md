@@ -467,3 +467,85 @@ ALLOWED_ORIGINS=*
 
 Set this in Railway variables, wait for redeploy, then narrow it back to the
 real Vercel URL once you've confirmed everything works.
+
+---
+
+## 10. Open Issues / Pre-Presentation Checklist
+
+Items confirmed **not yet working** as of 2026-05-13.  Resolve before the demo.
+
+### ❌ Vercel app shows no audio samples (browser visit)
+
+**Symptom:** Visiting the Vercel URL shows a blank/empty samples list.
+Vercel's own deploy preview screenshot still shows samples (that screenshot is
+cached from a time when Deployment Protection was on and Vercel's bot was
+authenticated).
+
+**Known fixed so far this session:**
+- `frontend/.env.production` committed → `VITE_API_URL` now bakes Railway URL ✅
+- Vercel Deployment Protection disabled ✅
+- `ALLOWED_ORIGINS` re-typed as single line (no embedded newline) ✅
+
+**Still unconfirmed:** whether the Railway backend is actually returning samples
+to the browser.  Possible remaining causes:
+1. **CORS still wrong** — open DevTools → Network tab → look for a failed OPTIONS
+   preflight on the `/api/samples/` request; if it's still 400, the
+   `ALLOWED_ORIGINS` value on Railway still has an issue.
+2. **Railway not serving samples** — `curl https://audio-sample-manager-production.up.railway.app/api/samples/` should return JSON; if it times out or returns empty, Railway may have restarted with a cold CLAP load.
+3. **Search 400 errors** — text searches return 400 in the browser (separately
+   unconfirmed root cause; likely CORS or CLAP startup failure).
+
+**To diagnose:** Open browser DevTools → Console and Network before loading the
+page.  Report the failing request URL and status code.
+
+### ❌ Social data not yet seeded
+
+`comments`, `ratings`, `collections` all have 0 rows.  Run before demo:
+
+```bash
+cd audio-sample-manager
+source .venv/bin/activate
+pip install faker      # dev-only dep, not in requirements.txt
+python -m scripts.seed_social
+```
+
+Verify:
+```bash
+python -m scripts.seed_social --dry-run   # preview counts before running
+curl http://localhost:8000/api/admin/queue # confirm DB is reachable
+```
+
+See §8 for full seeder documentation.
+
+### ❌ Google Drive `invalid_grant` (overnight ingestion uploads failing)
+
+`ingest_overnight.py` logs `invalid_grant: Bad Request` when uploading to Drive.
+Refresh token has expired or been revoked.
+
+**Fix:**
+```bash
+python -m scripts.gdrive_auth --client-id YOUR_ID --client-secret YOUR_SECRET
+```
+
+Then update `GDRIVE_REFRESH_TOKEN` in both local `.env` and Railway Variables.
+
+### ❌ Search 400 errors on deployed Vercel app
+
+Text searches via the Vercel frontend return 400 Bad Request.  Root cause not
+yet confirmed — investigation deferred.  Likely candidates:
+- CORS preflight failing for `POST /api/search/text`
+- CLAP model not loaded on Railway (search endpoint calls `registry.clap()`)
+- Railway deployment still serving an old build
+
+**To diagnose:**
+```bash
+curl -X POST https://audio-sample-manager-production.up.railway.app/api/search/text \
+  -H "Content-Type: application/json" \
+  -d '{"query":"drum","limit":5}'
+```
+If this returns results, the backend is fine and the issue is CORS.
+If this returns 500, CLAP may not have loaded.
+
+### ❌ Demo video not recorded
+
+3-minute walkthrough of all features still needed for final submission.
