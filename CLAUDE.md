@@ -57,14 +57,14 @@ Agents should be aware of outstanding requirements when suggesting work.
 | Individual effort | ✅ | Solo project |
 | 10–15 tables | ✅ | 16 tables implemented |
 | Authentication | ✅ | JWT, bcrypt, register/login, Bearer tokens, ownership guards |
-| **Cloud deployment** | ❌ **NOT DONE** | Biggest remaining gap — see Deployment section below |
+| **Cloud deployment** | ✅ | Backend live at `https://audio-sample-manager-production.up.railway.app` |
 | Alembic migrations | ✅ | Async runner; no raw SQL fixes |
 | External integration | ✅ | Freesound API, Supabase Storage, CLAP, YAMNet, MusiCNN |
 | Data seed / scraper | ✅ | 4,000 samples from Freesound; overnight batch ingestion |
 | ★ Complexity component | ✅✅✅ | Vector DB + 3 ML models + concurrent background pipeline |
 
 ### Deliverables still outstanding
-- **Live public URL** — app must be deployed (Railway + Vercel). See Deployment section.
+- **Live public URL** — backend deployed at `https://audio-sample-manager-production.up.railway.app`. Frontend (Vercel) still needed for a full public URL.
 - **Formal write-up** — project goals, architecture, 3-bug war room log, retrospective.
   Bug material is already documented in LESSONS.md §1–3 (PendingRollbackError,
   TF eager conflict, MusiCNN subprocess isolation).
@@ -82,9 +82,10 @@ pgvector HNSW index, and a three-session DB architecture to survive PgBouncer ti
 
 ---
 
-## Deployment (CRITICAL — not yet done)
+## Deployment
 
-The app currently runs locally only. It must be live at a public URL for the grade.
+**Backend (Railway):** `https://audio-sample-manager-production.up.railway.app` — live and healthy.
+**Frontend (Vercel):** not yet deployed — needed to complete the public URL requirement.
 
 ### Target architecture
 - **Backend → Railway** (`uvicorn app.main:app`)

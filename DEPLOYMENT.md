@@ -126,13 +126,15 @@ Subsequent deploys are faster (layer caching).
 In the dashboard, go to **Settings → Networking → Generate Domain**.  You'll
 get a URL like `your-app.railway.app`.  Copy it — you need it for Vercel.
 
+**Live Railway URL:** `https://audio-sample-manager-production.up.railway.app`
+
 ### 3.6  Smoke test Railway
 
 ```bash
-curl https://your-app.railway.app/health
+curl https://audio-sample-manager-production.up.railway.app/health
 # → {"status":"ok"}
 
-curl https://your-app.railway.app/api/admin/queue
+curl https://audio-sample-manager-production.up.railway.app/api/admin/queue
 # → {"counts":{...}, ...}
 ```
 
@@ -158,7 +160,7 @@ vercel login
 
 ```bash
 # In frontend/
-echo "VITE_API_URL=https://your-app.railway.app" > .env.production
+echo "VITE_API_URL=https://audio-sample-manager-production.up.railway.app" > .env.production
 ```
 
 Or set it as an environment variable in the Vercel dashboard after first deploy.
@@ -225,7 +227,7 @@ ps aux | grep process_queue | grep -v grep
 Monitor queue progress:
 ```bash
 curl http://localhost:8000/api/admin/queue   # local
-curl https://your-app.railway.app/api/admin/queue  # production
+curl https://audio-sample-manager-production.up.railway.app/api/admin/queue  # production
 ```
 
 The worker must be running for uploaded samples to get BPM, key, tags, and
