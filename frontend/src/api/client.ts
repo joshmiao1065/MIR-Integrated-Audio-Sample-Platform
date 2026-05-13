@@ -26,16 +26,20 @@ api.interceptors.response.use(
   }
 );
 
+// Build-time search backend override (set VITE_SEARCH_URL in Vercel env settings).
+// Falls back to the main API URL if not set.
+const SEARCH_BASE_URL = import.meta.env.VITE_SEARCH_URL ?? BASE_URL;
+
 /**
  * Returns a fresh axios instance for search requests.
- * Reads `search_api_url` from localStorage at call time so the URL can be
- * changed in the browser console without a page rebuild:
- *   localStorage.setItem("search_api_url", "https://xxxx.ngrok-free.app")
- * Omit or clear the key to fall back to the default Railway backend.
+ * Priority (highest first):
+ *   1. localStorage "search_api_url"  — per-browser runtime override (browser console)
+ *   2. VITE_SEARCH_URL env var        — baked at build time via Vercel env settings
+ *   3. VITE_API_URL / localhost        — default Railway backend
  */
 export function createSearchApi() {
   const override = localStorage.getItem("search_api_url");
-  const base = override ?? BASE_URL;
+  const base = override ?? SEARCH_BASE_URL;
   const instance = axios.create({ baseURL: `${base}/api` });
   const token = localStorage.getItem("access_token");
   if (token) instance.defaults.headers.common["Authorization"] = `Bearer ${token}`;
