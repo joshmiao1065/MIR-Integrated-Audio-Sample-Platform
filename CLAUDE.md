@@ -85,29 +85,34 @@ pgvector HNSW index, and a three-session DB architecture to survive PgBouncer ti
 ## Deployment
 
 **Backend (Railway):** `https://audio-sample-manager-production.up.railway.app` — live and healthy.
-**Frontend (Vercel):** `https://audio-sample-manager-6ouyzyyoo-josh-miao-s-projects.vercel.app` — live.
+**Frontend (Vercel):** `https://audio-sample-manager.vercel.app` — live (production alias).
 
-### Target architecture
-- **Backend → Railway** (`uvicorn app.main:app`)
+### Architecture
+- **Backend → Railway** (`uvicorn app.main:app`) — handles all API requests except search
+- **Search → local machine via ngrok** — CLAP (~900 MB) can't run on Railway free tier (512 MB); search requests are routed to a local uvicorn instance exposed via ngrok
 - **Frontend → Vercel** (`npm run build` → static deploy)
 - **Database + Storage → Supabase** (already cloud, no change needed)
-- **MIR worker → local machine** (see below)
+- **MIR worker → local machine** — same local uvicorn handles `process_queue`
 
-### Why the worker stays local
-CLAP (~900 MB), YAMNet, and MusiCNN together require ~3 GB RAM. Railway free tier
-allows 512 MB. The worker (`process_queue`) only needs to reach the Supabase DB and
-Storage, both of which are already public cloud services. Running the worker locally
-while the API is on Railway is a legitimate hybrid architecture.
+### How search routing works
+The frontend uses two Axios instances:
+- `api` — points to `VITE_API_URL` (Railway). Used for all browse/auth/social/upload/stream requests.
+- `createSearchApi()` — points to `VITE_SEARCH_URL` (ngrok → local machine). Used only for `POST /api/search/text` and `POST /api/search/audio`.
 
-### The search endpoint needs CLAP on Railway
-`POST /api/search/text` and `POST /api/search/audio` call `registry.clap()` to
-encode the query vector before hitting pgvector. This means CLAP must load on
-Railway at runtime. Options in order of preference:
-1. **Railway Starter ($5/mo, 8 GB RAM)** — load CLAP normally, everything works.
-2. **Lazy loading** — CLAP only loads on first search request; Railway may still OOM
-   on the free tier depending on other memory usage.
-3. **Pre-compute only** — disable search endpoint on Railway, only serve browse/CRUD.
-   Search works locally. Acceptable for demo if noted as a known limitation.
+Both env vars are baked into the Vite bundle at build time from `frontend/.env.production`.
+A runtime override is also supported: `localStorage.setItem("search_api_url", "https://...")` takes priority over `VITE_SEARCH_URL` without a rebuild.
+
+### Running search locally (required for deployed site)
+1. Start the local backend: `uvicorn app.main:app --reload`
+2. Start ngrok in a separate terminal: `ngrok http 8000`
+3. Copy the `https://xxxx.ngrok-free.dev` URL
+4. Update `frontend/.env.production`: `VITE_SEARCH_URL=https://xxxx.ngrok-free.dev`
+5. Deploy: `vercel --prod --force` (always use `--force` when changing `.env.production`)
+
+The ngrok URL changes on every restart (free tier). Update `.env.production` and redeploy each time. Keep the laptop plugged in and Windows sleep disabled to maximise tunnel uptime.
+
+CORS: `app/main.py` already allows all `audio-sample-manager*.vercel.app` origins via regex — no changes needed when the ngrok URL changes.
+The `ngrok-skip-browser-warning: 1` header is automatically added by `createSearchApi()` to bypass ngrok's browser interstitial.
 
 ### Environment variables needed on Railway
 All vars from `.env`: `DATABASE_URL`, `SUPABASE_URL`, `SUPABASE_ANON_KEY`,
@@ -115,32 +120,34 @@ All vars from `.env`: `DATABASE_URL`, `SUPABASE_URL`, `SUPABASE_ANON_KEY`,
 `ACCESS_TOKEN_EXPIRE_MINUTES`, `GDRIVE_FOLDER_ID`, `GDRIVE_CLIENT_ID`,
 `GDRIVE_CLIENT_SECRET`, `GDRIVE_REFRESH_TOKEN`. Do NOT commit `.env` to git.
 
-### CORS update required before deployment
-`app/main.py` currently allows `http://localhost:5173` (dev) and a placeholder
-production origin. Update `allow_origins` in `app/main.py` with the real Vercel URL
-before deploying.
-
-### Frontend env var
-Set `VITE_API_URL` in Vercel's environment settings to the Railway backend URL.
-The Vite proxy (localhost:8000) only works in dev; production needs the real URL.
+### Frontend env vars (`frontend/.env.production` — not committed to git)
+```
+VITE_API_URL=https://audio-sample-manager-production.up.railway.app
+VITE_SEARCH_URL=https://xxxx.ngrok-free.dev   # update when ngrok URL changes
+```
+These are uploaded to Vercel by the CLI during `vercel --prod`. There are no env vars
+set in the Vercel dashboard — the `.env.production` file is the single source of truth.
 
 ---
 
-## Current Database State (as of 2026-04-09)
+## Current Database State (as of 2026-05-13)
 
 ```
-samples:          6,039  (total ingested from Freesound)
-audio_embeddings: (processing ongoing)
-audio_metadata:   (processing ongoing)
-tags:             (growing)
-sample_tags:      (growing)
-users:              1    (developer only — needs demo data)
-comments:           0    ← needs seeding before demo
-ratings:            0    ← needs seeding before demo
-collections:        0    ← needs seeding before demo
-processing_queue: (check via API)
-search_queries:    19+
+samples:           785  (ingested from Freesound via ingest_overnight)
+audio_embeddings:  776  (CLAP 512-dim vectors — fully searchable)
+audio_metadata:    776  (Librosa features — BPM, key, energy, etc.)
+processing_queue:        done=776  pending=2  processing=4  failed=3
+  failed reasons: Nyquist frequency exceeded (low sample-rate files),
+                  "Format not recognised" (corrupt preview)
+users:             6+   (1 developer + 5 seed users from seed_social.py)
+comments:          seeded (seed_social.py ran successfully)
+ratings:           seeded
+collections:       seeded
+search_queries:    growing (text + audio search both confirmed working)
 ```
+
+Run `curl https://audio-sample-manager-production.up.railway.app/api/admin/queue`
+for live queue counts.
 
 Run `curl http://localhost:8000/api/admin/queue` for live counts.
 
@@ -716,6 +723,147 @@ This endpoint is defined in `app/main.py` as `GET /api/admin/queue`.
 
 ---
 
+---
+
+## Phase 2 Features — Architecture Decisions (for report)
+
+This section documents the design process for the social/discovery features added
+after the MVP. It records both what was implemented and what was deliberately not
+implemented, for academic write-up purposes.
+
+### Implemented (Migration 003)
+
+The following schema additions were designed and agreed upon. Migration 003 is the
+next Alembic migration to run.
+
+#### New tables
+
+**`follows`** — directed follow graph between users.
+Chosen over bidirectional mutual-friendship (which requires `status IN ('pending','accepted','blocked')`
+and a painful OR-join on both columns) because directed follow is simpler to query,
+scales better, and is the norm for content platforms. "Mutual friends" in the UI
+is simply two rows checked in Python. A `CHECK (follower_id != following_id)` constraint
+prevents self-following. CASCADE delete on both columns means no orphan rows when
+either user is deleted.
+
+**`user_activities`** — push-based activity log for the friend feed.
+Pull-based alternative (UNION across `comments`/`ratings`/`collection_items` at render
+time) was evaluated and rejected: it works at current scale but grows into an ever-larger
+multi-table fan-out as activity types are added, and can't be indexed efficiently.
+Push-based writes one row per social action; the feed query becomes a simple
+`WHERE user_id IN (following_ids) ORDER BY created_at DESC`. The `metadata JSONB`
+column stores type-specific context (e.g. `{score: 5}` for ratings, `{collection_name: ...}`
+for collection additions). Activity types logged: `comment`, `rating`, `collection_add`, `upload`.
+Downloads are not logged (private action; would flood the feed).
+
+**`trending_cache`** — lazy-computed ranking cache for trending and top-rated sections.
+Stores `(window_type, rank, sample_id, score, computed_at)`. Two `window_type` values:
+`'weekly_trending'` (recomputed when stale > 7 days) and `'daily_top_rated'` (recomputed
+when stale > 1 day). The cache is read first; if stale or empty, the computation query runs
+and overwrites the cache before returning results. First caller after a TTL expiry pays
+the cost — acceptable for a demo.
+
+PostgreSQL `MATERIALIZED VIEW` with `REFRESH MATERIALIZED VIEW` was evaluated and
+**rejected** because Supabase uses PgBouncer in transaction pooling mode, which refuses
+DDL-like commands (including `REFRESH MATERIALIZED VIEW`) inside the implicit transactions
+PgBouncer wraps every statement in. A regular table avoids this entirely.
+
+APScheduler / background scheduled tasks were also evaluated for periodic refresh and
+**rejected** because Railway restarts the container at any time, resetting the scheduler
+without warning. The TTL-based lazy-eval approach is stateless and survives restarts.
+
+#### Modified table
+
+**`collections.is_private` → `collections.visibility`**
+The boolean `is_private` column is replaced with a three-value `VARCHAR(20)` column:
+`'public'` (anyone), `'friends'` (mutual followers only), `'private'` (owner only).
+Migration 003 performs this in four steps to avoid constraint violations on existing rows:
+1. Add `visibility` as nullable
+2. Backfill: `UPDATE SET visibility = CASE WHEN is_private THEN 'private' ELSE 'public' END`
+3. Set NOT NULL + server_default + CHECK constraint
+4. Drop `is_private`
+
+"Friends-only" visibility is enforced as **mutual follow** (viewer follows owner AND owner
+follows viewer), not one-directional follow. Two queries against `follows` (one per direction),
+combined with an AND — if either is missing, 403.
+
+All code referencing `collection.is_private` (ORM model, Pydantic schemas, router handler,
+frontend TypeScript types) must be updated in the same PR as migration 003.
+
+#### New indexes on existing tables
+
+```sql
+CREATE INDEX ON download_history (downloaded_at DESC);  -- trending window query
+CREATE INDEX ON ratings (created_at DESC);              -- trending window query
+```
+
+---
+
+### Explored and Abandoned (document in report)
+
+#### Centroid-based embedding recommendations
+
+**Approach evaluated:** Build a 512-dim taste vector by computing a weighted mean of CLAP
+embeddings for all samples the user has rated/downloaded/collected. Query pgvector via
+`ORDER BY embedding <=> taste_vector` for nearest neighbors.
+
+**Why abandoned:** The centroid averaging problem. A user who likes both punchy kick drums
+(cluster A in embedding space) and smooth ambient pads (cluster B) has a centroid that lands
+between both clusters — in a region that doesn't strongly match either. The recommendation
+list would consist of mediocre in-between samples rather than excellent examples of each style.
+
+Solutions (multi-centroid / k-means clustering of the user's history before querying) were
+evaluated but deemed too complex for the project scope and would require additional ML
+infrastructure beyond what already runs.
+
+**What was chosen instead:** Tag-based TF-IDF recommendations (see below under Recommendations).
+
+#### Hierarchical tab navigation
+
+**Approach evaluated:** Top-level tabs (Drums, Synths, Guitar, Ambience…) with hover-activated
+subtab dropdowns (Kick, Snare, Hi-Hat…) that filter the browse grid. Two sub-approaches:
+(a) hardcode the taxonomy in TypeScript; (b) add a `parent_category` column to `tags` and
+serve the hierarchy from `GET /api/tags/hierarchy`.
+
+**Why abandoned:**
+1. **Tag taxonomy mismatch.** The current `tags.category` column stores the *source model*
+   (`yamnet`, `musicnn`, `manual`) — not a semantic hierarchy. YAMNet's 521 AudioSet classes
+   and MusiCNN's MagnaTagATune labels don't map cleanly to user-facing genre buckets.
+   Building a correct mapping would require manually categorising ~50 distinct tag names.
+2. **Scope.** The same filtering goal is served by the genre-browse chips on the curated
+   homepage (hardcoded featured tags), which deliver 90% of the UX value with 10% of the
+   complexity.
+3. **Mobile incompatibility.** CSS hover dropdowns don't work on touch devices. A JS-based
+   alternative with open/close state adds another layer of complexity.
+
+---
+
+### Recommendations: tag-based TF-IDF
+
+All YAMNet and MusiCNN tags (not `manual` tags) are used to build a weighted user preference
+profile. For each sample the user has engaged with, its tags receive a weight:
+`rating_5 → 3.0, rating_4 → 2.0, rating_3 → 1.0, rating_2 → −0.3, rating_1 → −0.5,
+download → 1.5, collection_add → 2.0`. Tags from the same sample through multiple signals
+are summed. This is then multiplied by the tag's IDF (inverse document frequency) to
+downweight generic tags like "Music" that appear on most samples.
+
+Candidate samples are scored by summing the user's TF-IDF tag weights for each tag they
+share with the candidate. Samples the user has already engaged with are excluded. The result
+is ranked by relevance score and the top 20 returned with `matching_tags` for explainability.
+
+Cold-start (no engagement history, or all candidate scores = 0): fall back to the weekly
+trending list. Response includes `is_personalized: bool` so the frontend can display
+"Recommended for you" vs. "What's popular right now."
+
+Similar-samples (no user required): count tag overlap between the target sample and all
+other samples; return top 6 by overlap count. Powered by the same `sample_tags` index
+already used by the recommendation CTE.
+
+The entire recommendation query is a single SQL CTE — no Python ML code, no extra
+ML infrastructure, runs against the existing tags tables.
+
+---
+
 ## Known Limitations
 
 - **`processing_queue.updated_at`** has no PostgreSQL trigger — it always shows the insert time. Set it manually in code on status changes, or add a trigger via migration.
@@ -723,7 +871,7 @@ This endpoint is defined in `app/main.py` as `GET /api/admin/queue`.
 - **MusiCNN `predict` uses the MTT_musicnn model** (MagnaTagATune, ~50 tags). The MSD_musicnn model (Million Song Dataset, more tags) is also available — swap `model="MTT_musicnn"` in `musicnn_worker.py` if you want broader coverage.
 - **User audio upload** — `POST /api/samples/upload` (multipart) accepts MP3/WAV/OGG/FLAC/AIFF/M4A up to 50 MB, uploads to Google Drive, inserts the `Sample` row, and queues MIR processing. The frontend `/upload` route (UploadPage.tsx) provides drag-and-drop UI; the Upload link appears in the Navbar when logged in. The older `POST /api/samples/` still exists for programmatic creation but requires a pre-existing `file_url`.
 - **Librosa key detection** only returns the root note (C, C#, D…) — mode (major/minor) detection is a future enhancement noted in the code.
-- **Text/audio search is unavailable on Railway free tier.** CLAP needs ~900 MB; Railway's free tier gives 512 MB. The search endpoint loads CLAP on first call, which OOMs the process and causes Railway to return 502. The frontend now shows a clear error message instead of silently keeping the pre-search results. To use semantic search: run the backend locally (`uvicorn app.main:app --reload`) and hit `http://localhost:8000/docs`, or upgrade to Railway Starter ($5/mo, 8 GB RAM).
+- **Text/audio search runs on the local machine, not Railway.** CLAP needs ~900 MB; Railway free tier gives 512 MB → OOM. Search requests are routed via `VITE_SEARCH_URL` to a local uvicorn exposed through ngrok. See the Deployment section for the full setup. The frontend shows a clear error banner when the search backend is unreachable (ngrok/uvicorn not running).
 - **CLAP hangs on very short audio** (< ~0.1 s at 48 kHz). Samples stuck in
   `processing` for > 5 min are likely very short clips. See LESSONS.md §8.
   The stale-detection mechanism in `process_queue.py` will eventually reset these.
