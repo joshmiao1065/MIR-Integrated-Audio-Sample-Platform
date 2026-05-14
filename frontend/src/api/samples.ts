@@ -26,6 +26,11 @@ export async function getSample(id: string): Promise<Sample> {
   return res.data;
 }
 
+export async function getUserSamples(username: string, limit = 30): Promise<Sample[]> {
+  const res = await api.get<Sample[]>(`/users/${username}/samples`, { params: { limit } });
+  return res.data;
+}
+
 export async function getSimilarSamples(id: string): Promise<Sample[]> {
   const res = await api.get<Sample[]>(`/recommendations/similar/${id}`);
   return res.data;

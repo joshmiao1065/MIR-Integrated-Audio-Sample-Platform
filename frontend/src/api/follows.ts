@@ -37,3 +37,8 @@ export async function getFeed(limit = 30, offset = 0): Promise<ActivityOut[]> {
   const res = await api.get<ActivityOut[]>("/users/feed", { params: { limit, offset } });
   return res.data;
 }
+
+export async function getUserActivity(username: string, limit = 30): Promise<ActivityOut[]> {
+  const res = await api.get<ActivityOut[]>(`/users/${username}/activity`, { params: { limit } });
+  return res.data;
+}

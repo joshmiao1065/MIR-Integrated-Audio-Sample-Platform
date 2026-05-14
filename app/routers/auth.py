@@ -61,4 +61,4 @@ async def login(
         raise HTTPException(status_code=401, detail="Incorrect email or password")
 
     token = create_access_token({"sub": str(user.id)})
-    return Token(access_token=token)
+    return Token(access_token=token, username=user.username)

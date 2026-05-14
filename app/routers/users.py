@@ -15,6 +15,7 @@ from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.database import get_db
 from app.deps import get_current_user, get_optional_user
@@ -23,6 +24,7 @@ from app.models.follow import Follow
 from app.models.sample import Sample
 from app.models.user import User
 from app.schemas.follow import ActivityOut, UserProfile, UserPublic
+from app.schemas.sample import SampleOut
 
 router = APIRouter()
 
@@ -245,3 +247,61 @@ async def list_following(
         .offset(offset)
     )
     return rows.scalars().all()
+
+
+@router.get("/{username}/samples", response_model=List[SampleOut])
+async def get_user_samples(
+    username: str,
+    limit: int = Query(default=30, ge=1, le=100),
+    db: AsyncSession = Depends(get_db),
+):
+    """All samples uploaded by this user, newest first."""
+    target = await _get_user_by_username(username, db)
+    rows = await db.execute(
+        select(Sample)
+        .options(selectinload(Sample.audio_metadata), selectinload(Sample.tags))
+        .where(Sample.user_id_owner == target.id)
+        .order_by(Sample.created_at.desc())
+        .limit(limit)
+    )
+    return rows.scalars().all()
+
+
+@router.get("/{username}/activity", response_model=List[ActivityOut])
+async def get_user_activity(
+    username: str,
+    limit: int = Query(default=30, ge=1, le=100),
+    db: AsyncSession = Depends(get_db),
+):
+    """Public activity log for a user (ratings, comments, uploads, collection adds)."""
+    target = await _get_user_by_username(username, db)
+    rows = await db.execute(
+        select(
+            UserActivity.id,
+            UserActivity.user_id,
+            User.username,
+            UserActivity.activity_type,
+            UserActivity.sample_id,
+            Sample.title.label("sample_title"),
+            UserActivity.activity_data,
+            UserActivity.created_at,
+        )
+        .join(User, UserActivity.user_id == User.id)
+        .outerjoin(Sample, UserActivity.sample_id == Sample.id)
+        .where(UserActivity.user_id == target.id)
+        .order_by(UserActivity.created_at.desc())
+        .limit(limit)
+    )
+    return [
+        ActivityOut(
+            id=r.id,
+            user_id=r.user_id,
+            username=r.username,
+            activity_type=r.activity_type,
+            sample_id=r.sample_id,
+            sample_title=r.sample_title,
+            activity_data=r.activity_data,
+            created_at=r.created_at,
+        )
+        for r in rows.all()
+    ]

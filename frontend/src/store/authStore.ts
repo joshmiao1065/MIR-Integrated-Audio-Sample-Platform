@@ -13,11 +13,11 @@ export const useAuthStore = create<AuthState>((set) => ({
   token: localStorage.getItem("access_token"),
   username: localStorage.getItem("username"),
 
-  login: async (username, password) => {
-    const data = await apiLogin(username, password);
+  login: async (email, password) => {
+    const data = await apiLogin(email, password);
     localStorage.setItem("access_token", data.access_token);
-    localStorage.setItem("username", username);
-    set({ token: data.access_token, username });
+    localStorage.setItem("username", data.username);
+    set({ token: data.access_token, username: data.username });
   },
 
   register: async (email, username, password) => {
