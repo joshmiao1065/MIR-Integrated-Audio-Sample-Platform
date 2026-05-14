@@ -369,6 +369,7 @@ main { max-width: 1100px; margin: 0 auto; padding: 1.5rem 1rem; }
 }
 .submit-btn:hover:not(:disabled) { background: var(--accent-hover); }
 .error-msg { color: var(--danger); font-size: 0.8rem; margin-top: 0.4rem; }
+.error-list { color: var(--danger); font-size: 0.8rem; margin-top: 0.4rem; padding-left: 1.2rem; }
 .auth-switch { font-size: 0.85rem; color: var(--text-muted); margin-top: 1rem; text-align: center; }
 
 /* ── Collections page ─────────────────────────────────────── */

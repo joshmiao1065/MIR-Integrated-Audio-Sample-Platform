@@ -6,21 +6,46 @@ export function RegisterPage() {
   const [email, setEmail] = useState("");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
-  const [error, setError] = useState("");
+  const [errors, setErrors] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const { register } = useAuthStore();
   const navigate = useNavigate();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError("");
+    setErrors([]);
+
+    const clientErrors: string[] = [];
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
+      clientErrors.push("Email: Must be a valid email address.");
+    if (username.length < 3)
+      clientErrors.push("Username: Must be at least 3 characters.");
+    if (password.length < 8)
+      clientErrors.push("Password: Must be at least 8 characters.");
+    if (clientErrors.length > 0) {
+      setErrors(clientErrors);
+      return;
+    }
+
     setLoading(true);
     try {
       await register(email, username, password);
       navigate("/");
     } catch (err: unknown) {
-      const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
-      setError(typeof detail === "string" ? detail : "Registration failed.");
+      const detail = (err as { response?: { data?: { detail?: unknown } } })?.response?.data?.detail;
+      if (Array.isArray(detail)) {
+        setErrors(
+          detail.map((e: { msg?: string; loc?: string[] }) => {
+            const field = e.loc && e.loc.length > 1 ? e.loc[e.loc.length - 1] : "";
+            const msg = e.msg ?? "Invalid value";
+            return field
+              ? `${field.charAt(0).toUpperCase() + field.slice(1)}: ${msg}`
+              : msg;
+          })
+        );
+      } else {
+        setErrors([typeof detail === "string" ? detail : "Registration failed."]);
+      }
     } finally {
       setLoading(false);
     }
@@ -51,9 +76,13 @@ export function RegisterPage() {
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             required
-            minLength={6}
+            minLength={8}
           />
-          {error && <p className="error-msg">{error}</p>}
+          {errors.length > 0 && (
+            <ul className="error-list">
+              {errors.map((e, i) => <li key={i}>{e}</li>)}
+            </ul>
+          )}
           <button type="submit" disabled={loading} className="submit-btn">
             {loading ? "Creating account…" : "Sign up"}
           </button>

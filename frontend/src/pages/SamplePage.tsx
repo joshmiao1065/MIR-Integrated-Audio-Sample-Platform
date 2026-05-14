@@ -26,6 +26,7 @@ export function SamplePage() {
   const [downloadStats, setDownloadStats] = useState<DownloadStats | null>(null);
   const [collections, setCollections] = useState<Collection[]>([]);
   const [commentText, setCommentText] = useState("");
+  const [submittingComment, setSubmittingComment] = useState(false);
   const [selectedRating, setSelectedRating] = useState(0);
   const [selectedCollection, setSelectedCollection] = useState("");
   const [loading, setLoading] = useState(true);
@@ -56,10 +57,15 @@ export function SamplePage() {
 
   const handleComment = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!id || !commentText.trim()) return;
-    const c = await postComment(id, commentText.trim());
-    setComments((prev) => [...prev, c]);
-    setCommentText("");
+    if (!id || !commentText.trim() || submittingComment) return;
+    setSubmittingComment(true);
+    try {
+      const c = await postComment(id, commentText.trim());
+      setComments((prev) => [...prev, c]);
+      setCommentText("");
+    } finally {
+      setSubmittingComment(false);
+    }
   };
 
   const handleDeleteComment = async (commentId: string) => {
@@ -203,7 +209,9 @@ export function SamplePage() {
               placeholder="Leave a comment…"
               rows={3}
             />
-            <button type="submit" disabled={!commentText.trim()}>Post</button>
+            <button type="submit" disabled={!commentText.trim() || submittingComment}>
+              {submittingComment ? "Posting…" : "Post"}
+            </button>
           </form>
         )}
         {!token && (
