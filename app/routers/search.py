@@ -1,4 +1,5 @@
 import asyncio
+import os
 from typing import Optional
 
 from fastapi import APIRouter, Depends, UploadFile, File, HTTPException
@@ -16,6 +17,23 @@ from app.schemas.sample import SampleOut
 from app.workers import registry
 
 router = APIRouter()
+
+# CLAP (~900 MB) exceeds Railway's 512 MB free-tier limit. Search endpoints must
+# only run on the local machine (exposed via ngrok). If a request somehow reaches
+# Railway (stale VITE_SEARCH_URL, misconfigured frontend), fail fast with 503
+# instead of OOMing and crashing the container.
+_ON_RAILWAY = bool(os.environ.get("RAILWAY_ENVIRONMENT"))
+
+
+def _require_search_available() -> None:
+    if _ON_RAILWAY:
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "Search is not available on the Railway backend. "
+                "Configure VITE_SEARCH_URL to point to the local ngrok tunnel."
+            ),
+        )
 
 
 def _vec_to_pg(vec: list[float]) -> str:
@@ -73,6 +91,7 @@ async def search_by_text(
     db: AsyncSession = Depends(get_db),
     current_user: Optional[User] = Depends(get_optional_user),
 ):
+    _require_search_available()
     loop = asyncio.get_running_loop()
     try:
         query_vector = await loop.run_in_executor(None, _clap_encode_text, payload.query)
@@ -100,6 +119,7 @@ async def search_by_audio(
     db: AsyncSession = Depends(get_db),
     current_user: Optional[User] = Depends(get_optional_user),
 ):
+    _require_search_available()
     if not file.content_type or not file.content_type.startswith("audio/"):
         raise HTTPException(status_code=400, detail="Uploaded file must be an audio file")
 
