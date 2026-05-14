@@ -3,7 +3,7 @@
   GET /api/recommendations/similar/{sample_id} — similar samples (public)
 """
 import uuid
-from typing import List, Optional
+from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
