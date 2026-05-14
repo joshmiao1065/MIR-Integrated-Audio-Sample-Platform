@@ -7,13 +7,14 @@ from pathlib import Path
 from typing import List, Optional
 
 import httpx
-from fastapi import APIRouter, Depends, File, Form, HTTPException, BackgroundTasks, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, BackgroundTasks, Query, UploadFile
 from sqlalchemy import delete, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.database import get_db, AsyncSessionLocal
 from app.deps import get_current_user
+from app.models.activity import UserActivity
 from app.models.audio_embedding import AudioEmbedding
 from app.models.audio_metadata import AudioMetadata
 from app.models.sample import Sample
@@ -22,6 +23,7 @@ from app.models.tag import Tag, SampleTag
 from app.models.user import User
 from app.schemas.sample import SampleOut, SampleCreate
 from app.services import gdrive
+from app.services import rankings as ranking_service
 from app.workers import registry
 from app.workers.librosa_worker import extract_features
 
@@ -51,17 +53,38 @@ _pipeline_semaphore = asyncio.Semaphore(1)
 
 @router.get("/", response_model=List[SampleOut])
 async def list_samples(
-    limit: int = 20,
-    offset: int = 0,
+    limit: int = Query(default=20, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+    sort: str = Query(default="new", description="new | trending | top_rated"),
+    tag_name: Optional[str] = Query(default=None, description="Filter by tag name"),
     db: AsyncSession = Depends(get_db),
 ):
-    result = await db.execute(
+    if sort in ("trending", "top_rated"):
+        window = "weekly_trending" if sort == "trending" else "daily_top_rated"
+        ordered_ids = await ranking_service.get_cached_rankings(db, window, limit=limit)
+        if not ordered_ids:
+            return []
+        result = await db.execute(
+            select(Sample)
+            .options(selectinload(Sample.audio_metadata), selectinload(Sample.tags))
+            .where(Sample.id.in_(ordered_ids))
+        )
+        by_id = {s.id: s for s in result.scalars().all()}
+        return [by_id[sid] for sid in ordered_ids if sid in by_id]
+
+    query = (
         select(Sample)
         .options(selectinload(Sample.audio_metadata), selectinload(Sample.tags))
         .order_by(Sample.created_at.desc())
-        .limit(limit)
-        .offset(offset)
     )
+    if tag_name:
+        query = (
+            query
+            .join(SampleTag, Sample.id == SampleTag.sample_id)
+            .join(Tag, SampleTag.tag_id == Tag.id)
+            .where(Tag.name == tag_name)
+        )
+    result = await db.execute(query.limit(limit).offset(offset))
     return result.scalars().all()
 
 
@@ -174,6 +197,12 @@ async def upload_sample(
     db.add(sample)
     await db.flush()
     db.add(ProcessingQueue(sample_id=sample.id, status=ProcessingStatus.pending))
+    db.add(UserActivity(
+        user_id=current_user.id,
+        activity_type="upload",
+        sample_id=sample.id,
+        activity_data={"sample_title": sample.title},
+    ))
     await db.commit()
     await db.refresh(sample)
 

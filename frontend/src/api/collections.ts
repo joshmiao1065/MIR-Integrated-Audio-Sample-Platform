@@ -1,5 +1,5 @@
 import { api } from "./client";
-import type { Collection, Sample } from "../types";
+import type { Collection, CollectionVisibility, Sample } from "../types";
 
 export async function listCollections(): Promise<Collection[]> {
   const res = await api.get<Collection[]>("/collections/");
@@ -9,9 +9,9 @@ export async function listCollections(): Promise<Collection[]> {
 export async function createCollection(
   name: string,
   description: string,
-  is_private: boolean
+  visibility: CollectionVisibility = "public"
 ): Promise<Collection> {
-  const res = await api.post<Collection>("/collections/", { name, description, is_private });
+  const res = await api.post<Collection>("/collections/", { name, description, visibility });
   return res.data;
 }
 

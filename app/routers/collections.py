@@ -8,7 +8,9 @@ from sqlalchemy.orm import selectinload
 
 from app.database import get_db
 from app.deps import get_current_user, get_optional_user
+from app.models.activity import UserActivity
 from app.models.collection import Collection, CollectionItem
+from app.models.follow import Follow
 from app.models.sample import Sample
 from app.models.user import User
 from app.schemas.collection import CollectionCreate, CollectionOut
@@ -17,20 +19,59 @@ from app.schemas.sample import SampleOut
 router = APIRouter()
 
 
-# ── Helper ────────────────────────────────────────────────────────────────────
+# ── Helpers ───────────────────────────────────────────────────────────────────
 
 async def _own_collection(
     collection_id: uuid.UUID,
     db: AsyncSession,
     current_user: User,
 ) -> Collection:
-    """Return the collection only if it belongs to current_user, else 404/403."""
     collection = await db.get(Collection, collection_id)
     if not collection:
         raise HTTPException(status_code=404, detail="Collection not found")
     if collection.user_id != current_user.id:
         raise HTTPException(status_code=403, detail="Not your collection")
     return collection
+
+
+async def _check_visibility(
+    collection: Collection,
+    current_user: Optional[User],
+    db: AsyncSession,
+) -> None:
+    """Raise 403 if the requesting user cannot view this collection."""
+    if collection.visibility == "public":
+        return
+
+    if collection.visibility == "private":
+        if not current_user or collection.user_id != current_user.id:
+            raise HTTPException(status_code=403, detail="This collection is private")
+        return
+
+    # friends: mutual follow required (viewer follows owner AND owner follows viewer)
+    if collection.visibility == "friends":
+        if not current_user:
+            raise HTTPException(status_code=403, detail="Log in to view this collection")
+        if current_user.id == collection.user_id:
+            return  # owner can always see their own
+
+        viewer_follows = await db.execute(
+            select(Follow).where(
+                Follow.follower_id == current_user.id,
+                Follow.following_id == collection.user_id,
+            )
+        )
+        owner_follows = await db.execute(
+            select(Follow).where(
+                Follow.follower_id == collection.user_id,
+                Follow.following_id == current_user.id,
+            )
+        )
+        if not viewer_follows.scalar_one_or_none() or not owner_follows.scalar_one_or_none():
+            raise HTTPException(
+                status_code=403,
+                detail="This collection is only visible to mutual followers",
+            )
 
 
 # ── Collection CRUD ───────────────────────────────────────────────────────────
@@ -40,7 +81,6 @@ async def list_my_collections(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Return all collections owned by the authenticated user."""
     result = await db.execute(
         select(Collection)
         .where(Collection.user_id == current_user.id)
@@ -81,11 +121,6 @@ async def get_collection_samples(
     db: AsyncSession = Depends(get_db),
     current_user: Optional[User] = Depends(get_optional_user),
 ):
-    """
-    List samples in a collection.
-    Private collections are only visible to their owner.
-    Eagerly loads audio_metadata and tags so SampleOut is fully populated.
-    """
     result = await db.execute(
         select(Collection)
         .options(
@@ -99,9 +134,8 @@ async def get_collection_samples(
     collection = result.scalar_one_or_none()
     if not collection:
         raise HTTPException(status_code=404, detail="Collection not found")
-    if collection.is_private:
-        if not current_user or collection.user_id != current_user.id:
-            raise HTTPException(status_code=403, detail="This collection is private")
+
+    await _check_visibility(collection, current_user, db)
     return collection.samples
 
 
@@ -115,13 +149,11 @@ async def add_to_collection(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    await _own_collection(collection_id, db, current_user)
+    collection = await _own_collection(collection_id, db, current_user)
 
-    # Validate the sample exists before attempting the insert
     if not await db.get(Sample, sample_id):
         raise HTTPException(status_code=404, detail="Sample not found")
 
-    # Idempotent: if the item is already in the collection, do nothing
     existing = await db.execute(
         select(CollectionItem).where(
             CollectionItem.collection_id == collection_id,
@@ -129,9 +161,16 @@ async def add_to_collection(
         )
     )
     if existing.scalar_one_or_none():
-        return  # already present — 204 with no further action
+        return  # idempotent
 
+    # Atomic: add item + activity log in same transaction
     db.add(CollectionItem(collection_id=collection_id, sample_id=sample_id))
+    db.add(UserActivity(
+        user_id=current_user.id,
+        activity_type="collection_add",
+        sample_id=sample_id,
+        activity_data={"collection_name": collection.name, "collection_id": str(collection_id)},
+    ))
     await db.commit()
 
 

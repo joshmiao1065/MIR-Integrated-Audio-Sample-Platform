@@ -5,7 +5,7 @@ from sqlalchemy import func, select
 from app.config import settings
 from app.database import get_db
 from app.models.system import ProcessingQueue
-from app.routers import auth, samples, search, collections, social
+from app.routers import auth, samples, search, collections, social, users, recommendations, tags
 
 app = FastAPI(
     title="Audio Sample Manager",
@@ -25,11 +25,14 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.include_router(auth.router,        prefix="/api/auth",        tags=["auth"])
-app.include_router(samples.router,     prefix="/api/samples",     tags=["samples"])
-app.include_router(social.router,      prefix="/api/samples",     tags=["social"])
-app.include_router(search.router,      prefix="/api/search",      tags=["search"])
-app.include_router(collections.router, prefix="/api/collections",  tags=["collections"])
+app.include_router(auth.router,            prefix="/api/auth",            tags=["auth"])
+app.include_router(samples.router,         prefix="/api/samples",         tags=["samples"])
+app.include_router(social.router,          prefix="/api/samples",         tags=["social"])
+app.include_router(search.router,          prefix="/api/search",           tags=["search"])
+app.include_router(collections.router,     prefix="/api/collections",      tags=["collections"])
+app.include_router(users.router,           prefix="/api/users",            tags=["users"])
+app.include_router(recommendations.router, prefix="/api/recommendations",  tags=["recommendations"])
+app.include_router(tags.router,            prefix="/api/tags",             tags=["tags"])
 
 
 @app.get("/health", tags=["meta"])

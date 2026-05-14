@@ -16,12 +16,13 @@ export function Navbar() {
         SampleLib
       </Link>
       <div className="nav-links">
-        <Link to="/">Browse</Link>
+        <Link to="/browse">Browse</Link>
+        {username && <Link to="/feed">Feed</Link>}
         {username && <Link to="/collections">Collections</Link>}
         {username && <Link to="/upload">Upload</Link>}
         {username ? (
           <>
-            <span className="nav-username">{username}</span>
+            <Link to={`/profile/${username}`} className="nav-username">{username}</Link>
             <button onClick={handleLogout} className="nav-btn">Log out</button>
           </>
         ) : (

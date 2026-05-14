@@ -54,3 +54,4 @@ class Sample(Base):
     download_history = relationship("DownloadHistory", back_populates="sample")
     processing_queue = relationship("ProcessingQueue", back_populates="sample")
     collections = relationship("Collection", secondary="collection_items", back_populates="samples")
+    activities = relationship("UserActivity", back_populates="sample")

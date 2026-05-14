@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime
-from typing import Optional
+from typing import Literal, Optional
 
 from pydantic import BaseModel
 
@@ -8,7 +8,7 @@ from pydantic import BaseModel
 class CollectionCreate(BaseModel):
     name: str
     description: Optional[str] = None
-    is_private: bool = False
+    visibility: Literal["public", "friends", "private"] = "public"
 
 
 class CollectionOut(BaseModel):
@@ -16,7 +16,7 @@ class CollectionOut(BaseModel):
     user_id: uuid.UUID
     name: str
     description: Optional[str]
-    is_private: bool
+    visibility: str
     created_at: datetime
 
     model_config = {"from_attributes": True}

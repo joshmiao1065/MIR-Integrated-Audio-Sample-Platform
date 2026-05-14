@@ -23,6 +23,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.deps import get_current_user, get_optional_user
+from app.models.activity import UserActivity
 from app.models.sample import Sample
 from app.models.social import Comment, Rating
 from app.models.system import DownloadHistory
@@ -82,6 +83,12 @@ async def post_comment(
     await _require_sample(sample_id, db)
     comment = Comment(user_id=current_user.id, sample_id=sample_id, text=payload.text)
     db.add(comment)
+    db.add(UserActivity(
+        user_id=current_user.id,
+        activity_type="comment",
+        sample_id=sample_id,
+        activity_data={"comment_preview": payload.text[:100]},
+    ))
     await db.commit()
     await db.refresh(comment)  # populate server-generated id and created_at
     return CommentOut(
@@ -164,6 +171,12 @@ async def upsert_rating(
         db.add(rating)
         response.status_code = status.HTTP_201_CREATED
 
+    db.add(UserActivity(
+        user_id=current_user.id,
+        activity_type="rating",
+        sample_id=sample_id,
+        activity_data={"score": payload.score},
+    ))
     await db.commit()
     await db.refresh(rating)
     return rating

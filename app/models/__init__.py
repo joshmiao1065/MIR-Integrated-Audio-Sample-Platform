@@ -8,6 +8,9 @@ from .tag import Tag, SampleTag
 from .collection import Collection, CollectionItem
 from .social import Comment, Rating
 from .system import DownloadHistory, SearchQuery, ProcessingQueue, ApiAuditLog, ProcessingStatus, QueryType
+from .follow import Follow
+from .activity import UserActivity
+from .ranking import TrendingCache
 
 __all__ = [
     "User",
@@ -20,4 +23,7 @@ __all__ = [
     "Comment", "Rating",
     "DownloadHistory", "SearchQuery", "ProcessingQueue", "ApiAuditLog",
     "ProcessingStatus", "QueryType",
+    "Follow",
+    "UserActivity",
+    "TrendingCache",
 ]

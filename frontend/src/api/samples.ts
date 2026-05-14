@@ -9,13 +9,30 @@ export async function uploadSample(file: File, title?: string): Promise<Sample> 
   return res.data;
 }
 
-export async function listSamples(limit = 20, offset = 0): Promise<Sample[]> {
-  const res = await api.get<Sample[]>("/samples/", { params: { limit, offset } });
+export interface ListSamplesParams {
+  limit?: number;
+  offset?: number;
+  sort?: "new" | "trending" | "top_rated";
+  tag_name?: string;
+}
+
+export async function listSamples(params: ListSamplesParams = {}): Promise<Sample[]> {
+  const res = await api.get<Sample[]>("/samples/", { params });
   return res.data;
 }
 
 export async function getSample(id: string): Promise<Sample> {
   const res = await api.get<Sample>(`/samples/${id}`);
+  return res.data;
+}
+
+export async function getSimilarSamples(id: string): Promise<Sample[]> {
+  const res = await api.get<Sample[]>(`/recommendations/similar/${id}`);
+  return res.data;
+}
+
+export async function getRecommendations(): Promise<Sample[]> {
+  const res = await api.get<Sample[]>("/recommendations/");
   return res.data;
 }
 

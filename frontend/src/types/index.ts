@@ -34,11 +34,13 @@ export interface SearchResponse {
   result_count: number;
 }
 
+export type CollectionVisibility = "public" | "friends" | "private";
+
 export interface Collection {
   id: string;
   name: string;
   description: string | null;
-  is_private: boolean;
+  visibility: CollectionVisibility;
   created_at: string;
 }
 
@@ -68,4 +70,36 @@ export interface UserOut {
   id: string;
   email: string;
   username: string;
+}
+
+export interface UserPublic {
+  id: string;
+  username: string;
+  created_at: string;
+}
+
+export interface UserProfile {
+  id: string;
+  username: string;
+  created_at: string;
+  follower_count: number;
+  following_count: number;
+  is_following: boolean;
+}
+
+export interface ActivityOut {
+  id: string;
+  user_id: string;
+  username: string;
+  activity_type: string;
+  sample_id: string | null;
+  sample_title: string | null;
+  activity_data: Record<string, any> | null;
+  created_at: string;
+}
+
+export interface TagWithCount {
+  name: string;
+  category: string;
+  sample_count: number;
 }

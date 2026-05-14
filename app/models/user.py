@@ -36,3 +36,7 @@ class User(Base):
     ratings = relationship("Rating", back_populates="user")
     download_history = relationship("DownloadHistory", back_populates="user")
     search_queries = relationship("SearchQuery", back_populates="user")
+    activities = relationship("UserActivity", back_populates="user")
+    # Directed follow relationships; use explicit foreign_keys to avoid ambiguity
+    following_rel = relationship("Follow", foreign_keys="Follow.follower_id", back_populates="follower")
+    followers_rel = relationship("Follow", foreign_keys="Follow.following_id", back_populates="following")

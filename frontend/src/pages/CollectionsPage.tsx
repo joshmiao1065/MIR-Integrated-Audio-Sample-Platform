@@ -7,7 +7,7 @@ import {
   getCollectionSamples,
 } from "../api/collections";
 import { SampleCard } from "../components/SampleCard";
-import type { Collection, Sample } from "../types";
+import type { Collection, CollectionVisibility, Sample } from "../types";
 
 export function CollectionsPage() {
   const [collections, setCollections] = useState<Collection[]>([]);
@@ -15,7 +15,7 @@ export function CollectionsPage() {
   const [samples, setSamples] = useState<Record<string, Sample[]>>({});
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
-  const [isPrivate, setIsPrivate] = useState(false);
+  const [visibility, setVisibility] = useState<CollectionVisibility>("public");
   const [creating, setCreating] = useState(false);
 
   useEffect(() => {
@@ -25,11 +25,11 @@ export function CollectionsPage() {
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim()) return;
-    const c = await createCollection(name.trim(), description.trim(), isPrivate);
+    const c = await createCollection(name.trim(), description.trim(), visibility);
     setCollections((prev) => [c, ...prev]);
     setName("");
     setDescription("");
-    setIsPrivate(false);
+    setVisibility("public");
     setCreating(false);
   };
 
@@ -75,13 +75,17 @@ export function CollectionsPage() {
             onChange={(e) => setDescription(e.target.value)}
             placeholder="Description (optional)"
           />
-          <label className="checkbox-label">
-            <input
-              type="checkbox"
-              checked={isPrivate}
-              onChange={(e) => setIsPrivate(e.target.checked)}
-            />
-            Private
+          <label className="form-label">
+            Visibility
+            <select
+              value={visibility}
+              onChange={(e) => setVisibility(e.target.value as CollectionVisibility)}
+              className="visibility-select"
+            >
+              <option value="public">Public — anyone can view</option>
+              <option value="friends">Friends — mutual followers only</option>
+              <option value="private">Private — only me</option>
+            </select>
           </label>
           <button type="submit">Create</button>
         </form>
@@ -97,7 +101,9 @@ export function CollectionsPage() {
             <div className="collection-row">
               <button onClick={() => handleExpand(c.id)} className="collection-name">
                 {expanded === c.id ? "▾" : "▸"} {c.name}
-                {c.is_private && <span className="private-badge">private</span>}
+                {c.visibility !== "public" && (
+                <span className="private-badge">{c.visibility}</span>
+              )}
               </button>
               <button onClick={() => handleDelete(c.id)} className="delete-btn">Delete</button>
             </div>
