@@ -836,6 +836,34 @@ serve the hierarchy from `GET /api/tags/hierarchy`.
 3. **Mobile incompatibility.** CSS hover dropdowns don't work on touch devices. A JS-based
    alternative with open/close state adds another layer of complexity.
 
+#### MIR processing for user-uploaded samples on Railway
+
+**Approach evaluated:** Run the full MIR pipeline (`_run_mir_pipeline`) inline as a
+FastAPI `BackgroundTask` when a user uploads a file via `POST /api/samples/upload` on
+Railway — exactly as it works on local dev.
+
+**Why abandoned:** CLAP weighs approximately 900 MB. Railway's free tier caps memory
+at 512 MB per container. When `_run_mir_pipeline` reaches the `registry.clap().encode_audio()`
+call, the process immediately OOMs and is killed by the kernel before any MIR results
+are written. The sample is left in `processing_queue` with `status='failed'` and an
+empty `error_log` (the process died before the error handler could write anything).
+
+**Alternative considered:** Download the uploaded file to the local machine and run
+`process_queue.py` against it. This was rejected because it inverts the data flow:
+the file has already been uploaded to Google Drive and is accessible by URL — fetching
+it back down just to run a local pipeline that then writes results back to the same
+cloud database is roundabout and requires the local machine to be running and reachable
+at the exact moment the user uploads. It also means the user has no reliable expectation
+of when (or whether) their upload gets processed.
+
+**What was chosen instead:** User uploads are stored immediately (Drive upload + DB row),
+`ProcessingQueue` is written with `status='pending'`, and the Railway background task is
+suppressed via `RAILWAY_ENVIRONMENT` guard. The local `process_queue.py` worker (which
+has full RAM access and all ML weights) picks up the pending row on its next poll cycle.
+This is the same approach used for the bulk Freesound ingestion pipeline and is consistent
+with the existing architecture. The tradeoff is that MIR features (BPM, key, tags, embedding)
+appear with a delay rather than immediately — acceptable for a demo, noted in the write-up.
+
 ---
 
 ### Recommendations: tag-based TF-IDF
