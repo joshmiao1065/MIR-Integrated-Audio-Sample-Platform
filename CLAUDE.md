@@ -107,7 +107,7 @@ A runtime override is also supported: `localStorage.setItem("search_api_url", "h
 2. Start ngrok in a separate terminal: `ngrok http 8000`
 3. Copy the `https://xxxx.ngrok-free.dev` URL
 4. Update `frontend/.env.production`: `VITE_SEARCH_URL=https://xxxx.ngrok-free.dev`
-5. Deploy: `vercel --prod --force` (always use `--force` when changing `.env.production`)
+5. Deploy: `vercel --prod` (plain `--prod` works; `--force` is not required)
 
 The ngrok URL changes on every restart (free tier). Update `.env.production` and redeploy each time. Keep the laptop plugged in and Windows sleep disabled to maximise tunnel uptime.
 
