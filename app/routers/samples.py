@@ -26,7 +26,6 @@ from app.schemas.sample import SampleOut, SampleCreate
 from app.services import gdrive
 from app.services import rankings as ranking_service
 from app.workers import registry
-from app.workers.librosa_worker import extract_features
 
 log = logging.getLogger(__name__)
 
@@ -119,7 +118,11 @@ async def create_sample(
     # _run_mir_pipeline will atomically claim this entry before starting work.
     # If process_queue or the overnight script claims it first, the background
     # task exits silently — no double processing, no race.
-    background_tasks.add_task(_run_mir_pipeline, sample.id)
+    if not os.environ.get("RAILWAY_ENVIRONMENT"):
+        background_tasks.add_task(_run_mir_pipeline, sample.id)
+    else:
+        log.info("Railway env detected — sample %s queued for local MIR worker.", sample.id)
+
     return sample
 
 
@@ -351,6 +354,7 @@ async def _run_mir_pipeline(sample_id: uuid.UUID, claimed: bool = False) -> None
                 resp.raise_for_status()
                 audio_bytes = resp.content
 
+            from app.workers.librosa_worker import extract_features  # lazy: keeps librosa out of Railway startup
             features = await loop.run_in_executor(None, extract_features, audio_bytes)
 
             embedding_vec = await loop.run_in_executor(
