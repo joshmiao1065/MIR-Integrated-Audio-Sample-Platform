@@ -390,7 +390,7 @@ def _plan_collections(
                     "user_id": user.id,
                     "name": col_name,
                     "description": col_desc,
-                    "is_private": False,
+                    "visibility": "public",
                     "created_at": _rand_past_dt(rng, days=30),
                 },
                 "items": [
@@ -463,7 +463,7 @@ async def _insert_all(
                 user_id=c["user_id"],
                 name=c["name"],
                 description=c["description"],
-                is_private=c["is_private"],
+                visibility=c["visibility"],
                 created_at=c["created_at"],
             ))
             for item in entry["items"]:

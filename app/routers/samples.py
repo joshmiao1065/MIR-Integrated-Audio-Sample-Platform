@@ -204,7 +204,16 @@ async def upload_sample(
         activity_data={"sample_title": sample.title},
     ))
     await db.commit()
-    await db.refresh(sample)
+
+    # Reload with relationships eagerly — db.refresh() only fetches scalar columns
+    # and leaves audio_metadata/tags as unloaded lazy attrs, which causes
+    # MissingGreenlet when FastAPI serializes SampleOut outside the greenlet context.
+    result = await db.execute(
+        select(Sample)
+        .where(Sample.id == sample.id)
+        .options(selectinload(Sample.audio_metadata), selectinload(Sample.tags))
+    )
+    sample = result.scalar_one()
 
     background_tasks.add_task(_run_mir_pipeline, sample.id)
     return sample

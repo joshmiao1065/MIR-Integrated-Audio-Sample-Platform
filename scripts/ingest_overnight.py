@@ -365,56 +365,60 @@ async def _producer(
         if not results:
             return "done"
 
-        async with AsyncSessionLocal() as db:
-            for sound in results:
-                # Per-query cap: stop ingesting from this query and move on.
-                if max_per_query and query_ingested[0] >= max_per_query:
-                    return "quota"
+        for sound in results:
+            # Per-query cap: stop ingesting from this query and move on.
+            if max_per_query and query_ingested[0] >= max_per_query:
+                return "quota"
 
-                freesound_id = sound.get("id")
-                if not freesound_id:
-                    continue
+            freesound_id = sound.get("id")
+            if not freesound_id:
+                continue
 
-                # Duplicate check — already-seen sounds don't count toward cap.
-                if (await db.execute(
+            # Session A (short): duplicate check only — close before any I/O.
+            async with AsyncSessionLocal() as db:
+                already = (await db.execute(
                     select(Sample).where(Sample.freesound_id == freesound_id)
-                )).scalar_one_or_none():
-                    continue
+                )).scalar_one_or_none()
+            if already:
+                continue
 
-                previews = sound.get("previews", {})
-                preview_url = (
-                    previews.get("preview-hq-mp3") or previews.get("preview-lq-mp3")
+            previews = sound.get("previews", {})
+            preview_url = (
+                previews.get("preview-hq-mp3") or previews.get("preview-lq-mp3")
+            )
+            if not preview_url:
+                continue
+
+            # No session during slow network I/O — avoids PgBouncer idle timeout.
+            try:
+                audio_bytes = await client.download_preview(preview_url)
+            except Exception as exc:
+                log.warning("Download failed %s: %s", freesound_id, exc)
+                continue
+
+            filename = f"freesound-{freesound_id}.mp3"
+            try:
+                gdrive_file_id, public_url = await asyncio.get_running_loop().run_in_executor(
+                    None, gdrive.upload_audio, audio_bytes, filename
                 )
-                if not preview_url:
-                    continue
+            except Exception as exc:
+                log.warning("Google Drive upload failed %s: %s", freesound_id, exc)
+                continue
 
-                try:
-                    audio_bytes = await client.download_preview(preview_url)
-                except Exception as exc:
-                    log.warning("Download failed %s: %s", freesound_id, exc)
-                    continue
-
-                filename = f"freesound-{freesound_id}.mp3"
-                try:
-                    gdrive_file_id, public_url = await asyncio.get_running_loop().run_in_executor(
-                        None, gdrive.upload_audio, audio_bytes, filename
-                    )
-                except Exception as exc:
-                    log.warning("Google Drive upload failed %s: %s", freesound_id, exc)
-                    continue
-
-                dur = sound.get("duration")
-                sample = Sample(
-                    title=sound.get("name", f"freesound-{freesound_id}"),
-                    freesound_id=freesound_id,
-                    file_url=public_url,
-                    gdrive_file_id=gdrive_file_id,
-                    duration_ms=int(dur * 1000) if dur is not None else None,
-                    file_size_bytes=sound.get("filesize"),
-                    mime_type="audio/mpeg",
-                )
-                db.add(sample)
-                try:
+            # Session B (short): insert + commit — fresh connection after I/O.
+            dur = sound.get("duration")
+            sample = Sample(
+                title=sound.get("name", f"freesound-{freesound_id}"),
+                freesound_id=freesound_id,
+                file_url=public_url,
+                gdrive_file_id=gdrive_file_id,
+                duration_ms=int(dur * 1000) if dur is not None else None,
+                file_size_bytes=sound.get("filesize"),
+                mime_type="audio/mpeg",
+            )
+            try:
+                async with AsyncSessionLocal() as db:
+                    db.add(sample)
                     await db.flush()
                     db.add(
                         ProcessingQueue(
@@ -426,19 +430,18 @@ async def _producer(
                     # valid, and db.flush() already populated sample.id via RETURNING.
                     # A post-commit SELECT would cross a PgBouncer transaction boundary
                     # and trigger InvalidSQLStatementNameError.
-                    query_ingested[0] += 1
-                    state["total_ingested"] += 1
-                    log.info(
-                        "[+%d] Ingested freesound:%s — %s",
-                        state["total_ingested"], freesound_id, sample.title[:60],
-                    )
-                    if process_inline:
-                        # Hand the sample ID to the consumer for MIR processing.
-                        await pipeline_queue.put(sample.id)
-                except Exception as exc:
-                    await db.rollback()
-                    log.warning("DB insert failed %s: %s", freesound_id, exc)
-                    continue
+                query_ingested[0] += 1
+                state["total_ingested"] += 1
+                log.info(
+                    "[+%d] Ingested freesound:%s — %s",
+                    state["total_ingested"], freesound_id, sample.title[:60],
+                )
+                if process_inline:
+                    # Hand the sample ID to the consumer for MIR processing.
+                    await pipeline_queue.put(sample.id)
+            except Exception as exc:
+                log.warning("DB insert failed %s: %s", freesound_id, exc)
+                continue
 
         return "done" if not data.get("next") else "continue"
 
