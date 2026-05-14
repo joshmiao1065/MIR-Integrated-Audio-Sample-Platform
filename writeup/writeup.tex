@@ -1,0 +1,803 @@
+% =========================================================================
+%  Audio Sample Manager — ECE 464 Final Write-up
+%  Cooper Union, Spring 2026
+%  Compile with: pdflatex → pdflatex (run twice for TOC/hyperref)
+% =========================================================================
+
+\documentclass[12pt,letterpaper]{report}
+
+% ----- Core layout & encoding --------------------------------------------
+\usepackage[margin=1in, top=1.1in, bottom=1.1in]{geometry}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{mathptmx}          % Times New Roman for text & math
+\usepackage{microtype}         % better justification
+
+% ----- Math --------------------------------------------------------------
+\usepackage{amsmath}
+\usepackage{amssymb}
+
+% ----- Figures & graphics ------------------------------------------------
+\usepackage{graphicx}
+
+% ----- Tables ------------------------------------------------------------
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{tabularx}
+\usepackage{longtable}
+
+% ----- Code listings -----------------------------------------------------
+\usepackage{listings}
+\usepackage{xcolor}
+
+\definecolor{codebg}{RGB}{248,248,248}
+\definecolor{codeframe}{RGB}{210,210,210}
+\definecolor{kwcolor}{RGB}{0,0,200}
+\definecolor{strcolor}{RGB}{163,21,21}
+\definecolor{cmtcolor}{RGB}{0,128,0}
+\definecolor{numcolor}{RGB}{128,128,128}
+
+\lstdefinestyle{sqlstyle}{
+  language=SQL,
+  backgroundcolor=\color{codebg},
+  frame=single, rulecolor=\color{codeframe},
+  basicstyle=\ttfamily\small,
+  keywordstyle=\color{kwcolor}\bfseries,
+  stringstyle=\color{strcolor},
+  commentstyle=\color{cmtcolor}\itshape,
+  numberstyle=\tiny\color{numcolor},
+  numbers=left, numbersep=8pt,
+  breaklines=true, keepspaces=true,
+  showstringspaces=false,
+  morekeywords={USING,HNSW,vector_cosine_ops,SKIP,LOCKED,RETURNING,
+                TIMESTAMPTZ,vector,uuid,UUID,SMALLINT,BOOLEAN,FLOAT,
+                REFERENCES,CASCADE,UNIQUE,CHECK,EXTENSION,PARTIAL},
+  sensitive=false,
+  tabsize=4,
+}
+
+\lstdefinestyle{pythonstyle}{
+  language=Python,
+  backgroundcolor=\color{codebg},
+  frame=single, rulecolor=\color{codeframe},
+  basicstyle=\ttfamily\small,
+  keywordstyle=\color{kwcolor}\bfseries,
+  stringstyle=\color{strcolor},
+  commentstyle=\color{cmtcolor}\itshape,
+  numberstyle=\tiny\color{numcolor},
+  numbers=left, numbersep=8pt,
+  breaklines=true, keepspaces=true,
+  showstringspaces=false,
+  tabsize=4,
+}
+
+\lstdefinestyle{bashstyle}{
+  language=bash,
+  backgroundcolor=\color{codebg},
+  frame=single, rulecolor=\color{codeframe},
+  basicstyle=\ttfamily\small,
+  keywordstyle=\color{kwcolor},
+  numberstyle=\tiny\color{numcolor},
+  breaklines=true, keepspaces=true,
+  showstringspaces=false,
+  tabsize=4,
+}
+
+% ----- Callout boxes (tcolorbox) -----------------------------------------
+\usepackage{tcolorbox}
+\tcbuselibrary{breakable,skins}
+
+% Orange "not yet achieved" box
+\newtcolorbox{warningbox}{
+  colback=orange!8!white,
+  colframe=orange!65!black,
+  arc=4pt, boxrule=1.4pt,
+  left=8pt, right=8pt, top=6pt, bottom=6pt,
+  breakable,
+  fontupper=\small,
+}
+
+% Blue "note" box
+\newtcolorbox{notebox}{
+  colback=blue!5!white,
+  colframe=blue!50!black,
+  arc=4pt, boxrule=1.2pt,
+  left=8pt, right=8pt, top=6pt, bottom=6pt,
+  breakable,
+  fontupper=\small,
+}
+
+% ----- Enumeration -------------------------------------------------------
+\usepackage{enumitem}
+\setlist[itemize]{noitemsep, topsep=4pt}
+\setlist[enumerate]{noitemsep, topsep=4pt}
+
+% ----- Headers & footers -------------------------------------------------
+\usepackage{fancyhdr}
+\pagestyle{fancy}
+\fancyhf{}
+\lhead{\small\textit{ECE 464: Databases --- Final Capstone}}
+\rhead{\small\textit{Audio Sample Manager}}
+\cfoot{\thepage}
+\renewcommand{\headrulewidth}{0.4pt}
+
+% ----- Hyperlinks --------------------------------------------------------
+\usepackage[
+  colorlinks=true,
+  linkcolor=blue!70!black,
+  urlcolor=blue!70!black,
+  citecolor=blue!70!black,
+  pdftitle={Audio Sample Manager — ECE 464 Final Write-up},
+  pdfauthor={Josh Miao},
+]{hyperref}
+
+% ----- Chapter/section style (no "Chapter N" heading) --------------------
+\usepackage{titlesec}
+\titleformat{\chapter}[display]
+  {\normalfont\Large\bfseries}
+  {}
+  {0pt}
+  {\Large}
+\titlespacing*{\chapter}{0pt}{-10pt}{12pt}
+
+% ----- Misc --------------------------------------------------------------
+\usepackage{setspace}
+\setstretch{1.15}
+\usepackage{caption}
+\captionsetup{font=small, labelfont=bf}
+
+% =========================================================================
+\begin{document}
+% =========================================================================
+
+% -------------------------------------------------------------------------
+%  Title page
+% -------------------------------------------------------------------------
+\begin{titlepage}
+  \centering
+  \vspace*{1.5cm}
+
+  {\large Cooper Union --- The Albert Nerken School of Engineering}\\[0.4cm]
+  {\large ECE 464: Databases --- Final Capstone, Spring 2026}\\[2cm]
+
+  {\Huge\bfseries Audio Sample Manager}\\[0.6cm]
+  {\Large An MIR-Powered Semantic Audio Discovery Platform}\\[2.5cm]
+
+  {\large\bfseries Josh Miao}\\[0.4cm]
+  {\large Spring 2026}\\[2cm]
+
+  \hrule\vspace{0.5cm}
+  \begin{tabular}{ll}
+    \textbf{GitHub:}   & \url{https://github.com/joshmiao1065/MIR-Integrated-Audio-Sample-Platform} \\[4pt]
+    \textbf{Backend:}  & \url{https://audio-sample-manager-production.up.railway.app} \\[4pt]
+    \textbf{Frontend:} & \url{https://audio-sample-manager-6ouyzyyoo-josh-miao-s-projects.vercel.app} \\[4pt]
+    \textbf{API Docs:} & \url{https://audio-sample-manager-production.up.railway.app/docs} \\[4pt]
+    \textbf{Demo Video:} & \textbf{[link to be added before final presentation]} \\
+  \end{tabular}
+  \vspace{0.5cm}
+  \hrule
+
+  \vfill
+  {\small Solo project --- all code written individually with AI assistance (Claude Code).}
+\end{titlepage}
+
+% -------------------------------------------------------------------------
+%  Table of Contents
+% -------------------------------------------------------------------------
+\tableofcontents
+\newpage
+
+% =========================================================================
+\chapter{Mission}
+% =========================================================================
+
+Music producers --- from bedroom beatmakers to professional sound designers --- curate and browse large personal sample libraries. The dominant organisational strategy is manual: folders named \texttt{kicks/}, \texttt{808s/}, \texttt{ambient/}, and hand-applied tags (if any). This workflow breaks the moment a producer tries to recall \textit{``that rainy lo-fi texture from six months ago''} or wants \textit{``something that feels like a late-night jazz club.''} No folder structure, and no exact-match keyword search, can satisfy those queries.
+
+\textbf{Audio Sample Manager} solves this with semantic search. Every sample in the library is encoded into a 512-dimensional vector using LAION-CLAP (Contrastive Language--Audio Pretraining), a model trained on large-scale audio--caption pairs so that acoustically similar audio and semantically related text land close together in the same embedding space. Those vectors are stored in a PostgreSQL \texttt{pgvector} column and searched at query time using cosine distance. A user who types \textit{``punchy 808 with room reverb''} or uploads a reference clip retrieves the nearest neighbours without relying on any explicit tag match.
+
+Secondary goals:
+
+\begin{itemize}
+  \item \textbf{Zero-touch annotation.} Every ingested sample is automatically classified by sound event (Google YAMNet, 521 AudioSet classes), genre and mood (MTG MusiCNN, MagnaTagATune labels), BPM, musical key, energy, loudness, and spectral features (Librosa). No manual tagging is required.
+  \item \textbf{Social layer.} Per-sample comments, 1--5 star ratings, download tracking, and user-curated collections.
+  \item \textbf{Bulk library seeding.} A scraper against the Freesound APIv2 ingested over 6{,}000 real-world samples across $\approx$300 curated search queries.
+  \item \textbf{Open pipeline.} Processing is driven by a \texttt{processing\_queue} table; adding a new ML model requires only a new worker function and a migration to add its output columns.
+\end{itemize}
+
+% =========================================================================
+\chapter{Schema}
+% =========================================================================
+
+The database contains \textbf{16 tables} across five logical domains, all created and evolved through Alembic migrations. All primary keys are \texttt{UUID} generated by \texttt{uuid\_generate\_v4()}; all timestamps are \texttt{TIMESTAMPTZ}. The \texttt{vector} and \texttt{uuid-ossp} PostgreSQL extensions are enabled in the initial migration.
+
+% ----- 2.1 Core ----------------------------------------------------------
+\section{Core}
+
+\begin{center}
+\begin{tabularx}{\textwidth}{lX}
+\toprule
+\textbf{Table} & \textbf{Key columns and notes} \\
+\midrule
+\texttt{samples}
+  & \texttt{id} (PK), \texttt{title}, \texttt{freesound\_id} (nullable, unique),
+    \texttt{file\_url} (Google Drive direct-download URL for new files; Supabase
+    Storage URL for legacy files), \texttt{gdrive\_file\_id} (nullable,
+    stored separately for O(1) deletion without URL parsing),
+    \texttt{waveform\_url}, \texttt{duration\_ms}, \texttt{file\_size\_bytes},
+    \texttt{mime\_type}, \texttt{user\_id\_owner} (FK $\to$ users, SET NULL),
+    \texttt{pack\_id} (FK $\to$ packs, SET NULL), \texttt{created\_at}. \\
+\addlinespace
+\texttt{audio\_embeddings}
+  & \texttt{sample\_id} (FK $\to$ samples, CASCADE, UNIQUE),
+    \texttt{embedding vector(512)} --- the LAION-CLAP output,
+    \texttt{model\_version} (default \texttt{'clap-htsat-fused'}).
+    \textbf{HNSW index} on \texttt{embedding} using \texttt{vector\_cosine\_ops}
+    (m = 16, ef\_construction = 64). \\
+\addlinespace
+\texttt{audio\_metadata}
+  & \texttt{sample\_id} (FK $\to$ samples, CASCADE, UNIQUE),
+    \texttt{bpm} (float), \texttt{key} (varchar 4, e.g.\ \texttt{"C\#"}),
+    \texttt{energy\_level}, \texttt{loudness\_lufs}, \texttt{spectral\_centroid},
+    \texttt{zero\_crossing\_rate}, \texttt{sample\_rate} (int),
+    \texttt{is\_processed} (bool). \\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+% ----- 2.2 Taxonomy -------------------------------------------------------
+\section{Taxonomy}
+
+\begin{center}
+\begin{tabularx}{\textwidth}{lX}
+\toprule
+\textbf{Table} & \textbf{Key columns and notes} \\
+\midrule
+\texttt{tags}
+  & \texttt{name} (varchar 100, unique, indexed), \texttt{category}
+    (varchar 50). Category values: \texttt{yamnet} (AudioSet sound-event
+    labels), \texttt{musicnn} (MagnaTagATune labels), \texttt{manual}
+    (user-applied). Storing the source model as the category avoids
+    ambiguity when YAMNet and MusiCNN produce the same label name. \\
+\addlinespace
+\texttt{sample\_tags}
+  & Composite PK \texttt{(sample\_id, tag\_id)}.
+    \texttt{source} (varchar 20): \texttt{"auto"} for pipeline-generated,
+    \texttt{"manual"} for user-applied. Tag deduplication (when both YAMNet
+    and MusiCNN emit the same label) is handled in application code using a
+    seen-ID set; only the first occurrence is written. \\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+% ----- 2.3 Collections & Packs --------------------------------------------
+\section{Collections \& Packs}
+
+\begin{center}
+\begin{tabularx}{\textwidth}{lX}
+\toprule
+\textbf{Table} & \textbf{Key columns and notes} \\
+\midrule
+\texttt{packs}
+  & Freesound packs or user-curated groups.
+    \texttt{freesound\_pack\_id} (int, nullable, unique) --- NULL for
+    user-created packs. \\
+\texttt{pack\_samples}
+  & M:M junction for packs: \texttt{(pack\_id, sample\_id)}. \\
+\addlinespace
+\texttt{collections}
+  & User-owned playlists.
+    \texttt{user\_id} (FK $\to$ users, CASCADE), \texttt{name},
+    \texttt{description}, \texttt{is\_private} (bool). \\
+\texttt{collection\_items}
+  & M:M junction: \texttt{(collection\_id, sample\_id, added\_at)}.
+    Unique on \texttt{(collection\_id, sample\_id)} --- idempotent add. \\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+% ----- 2.4 Social ---------------------------------------------------------
+\section{Social}
+
+\begin{center}
+\begin{tabularx}{\textwidth}{lX}
+\toprule
+\textbf{Table} & \textbf{Key columns and notes} \\
+\midrule
+\texttt{comments}
+  & \texttt{user\_id} (SET NULL on delete --- deleted users' comments remain
+    attributed to ``Anonymous''), \texttt{sample\_id} (CASCADE),
+    \texttt{text}, \texttt{created\_at}. \\
+\addlinespace
+\texttt{ratings}
+  & One row per \texttt{(user\_id, sample\_id)} --- UNIQUE constraint enforced
+    at the DB layer. \texttt{score} SmallInt with \texttt{CHECK (score BETWEEN
+    1 AND 5)}. Upsert on conflict: updating your rating replaces the old row. \\
+\addlinespace
+\texttt{download\_history}
+  & \texttt{user\_id} (nullable, SET NULL), \texttt{sample\_id} (CASCADE),
+    \texttt{downloaded\_at}. Records every \texttt{GET /api/samples/\{id\}/download}
+    hit; used for analytics and ``your downloads'' UX. \\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+\begin{warningbox}
+  \textbf{[NOT YET ACHIEVED: Social data is schema-complete but contains no demo data.]}
+  The \texttt{comments}, \texttt{ratings}, and \texttt{collection\_items} tables
+  currently hold zero rows in the production database. A seeding script
+  (\texttt{scripts/seed\_social.py}) has been implemented and generates realistic
+  synthetic data (fake users, tag-aware comments, themed collections) but has not
+  yet been run against the production Supabase instance. This must be completed
+  before the final presentation so the social schema is visibly exercised.
+\end{warningbox}
+
+% ----- 2.5 System ---------------------------------------------------------
+\section{System}
+
+\begin{center}
+\begin{tabularx}{\textwidth}{lX}
+\toprule
+\textbf{Table} & \textbf{Key columns and notes} \\
+\midrule
+\texttt{users}
+  & \texttt{id}, \texttt{email} (unique), \texttt{username} (unique),
+    \texttt{hashed\_password} (bcrypt), \texttt{preferences\_json} (nullable),
+    \texttt{is\_active} (bool), \texttt{created\_at}, \texttt{updated\_at}. \\
+\addlinespace
+\texttt{search\_queries}
+  & Analytics log.
+    \texttt{query\_type} enum (\texttt{text} | \texttt{audio}),
+    \texttt{query\_text} (nullable), \texttt{result\_count},
+    optional \texttt{user\_id}. Not used for query optimisation --- purely
+    observational. \\
+\addlinespace
+\texttt{processing\_queue}
+  & Drives the MIR pipeline.
+    \texttt{status} enum: \texttt{pending} $\to$ \texttt{processing} $\to$
+    \texttt{done} | \texttt{failed}. \texttt{retry\_count}, \texttt{worker\_id}
+    (hostname-PID for stall detection), \texttt{error\_log} (text on failure).
+    \texttt{updated\_at} has no auto-update trigger --- set manually in code on
+    every status change. \\
+\addlinespace
+\texttt{api\_audit\_log}
+  & \texttt{endpoint}, \texttt{method}, \texttt{status\_code}, optional
+    \texttt{user\_id}, \texttt{duration\_ms}. Inserted as a FastAPI middleware
+    side effect. \\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+% =========================================================================
+\chapter{Architecture}
+% =========================================================================
+
+\section{System Overview}
+
+\begin{lstlisting}[style=bashstyle,
+  caption={High-level deployment topology},
+  label={lst:topology}]
+Browser  ---->  Vercel  (React + Vite, static bundle)
+                  |  /api/* --> VITE_API_URL
+                  v
+              Railway  (FastAPI + Uvicorn, 1 worker)
+                  |                     |
+              Supabase              Google Drive
+          (PostgreSQL +           (MP3 audio files,
+           pgvector,               personal OAuth2
+           asyncpg)                refresh token)
+
+Local machine ---->  process_queue worker
+                      (CLAP + YAMNet + MusiCNN)
+                      reads/writes Supabase directly
+
+Freesound API ---->  ingest scripts  (local, one-off)
+                       |
+                       v
+                   Google Drive  (audio upload)
+                   Supabase      (sample row + queue row)
+\end{lstlisting}
+
+\section{Component Responsibilities}
+
+\paragraph{Vercel (Frontend).}
+A React 18 + Vite single-page application compiled to static assets. All API calls are routed to the Railway backend via the \texttt{VITE\_API\_URL} build-time environment variable (\texttt{import.meta.env.VITE\_API\_URL}); at development time a Vite proxy handles \texttt{/api/*} to \texttt{localhost:8000}. Wavesurfer.js renders interactive waveforms; Zustand persists the JWT and username in \texttt{localStorage}. Client-side routing uses React Router v6 with a catch-all rewrite rule in \texttt{vercel.json} to support direct URL access to any SPA route.
+
+\paragraph{Railway (Backend API).}
+A FastAPI 0.111 service running Uvicorn with \textbf{one worker process} (ML singletons instantiated with \texttt{@lru\_cache} are not fork-safe). CORS is configured from a comma-separated \texttt{ALLOWED\_ORIGINS} environment variable to support both \texttt{localhost:5173} and the Vercel deployment URL. Dependencies are split between \texttt{requirements.txt} (full, used locally) and \texttt{requirements-railway.txt} (CPU-only PyTorch, no TensorFlow) to keep the Railway build under 1.5 GB. A \texttt{nixpacks.toml} override selects the Railway-specific requirements file; a \texttt{Procfile} sets the start command with \texttt{\$PORT} binding.
+
+\paragraph{Supabase (Database).}
+PostgreSQL 15 with the \texttt{pgvector} extension. The asyncpg connection string is passed to SQLAlchemy's \texttt{create\_async\_engine} with \texttt{connect\_args=\{"statement\_cache\_size": 0\}}. This is \textbf{required} when Supabase's PgBouncer is in transaction mode: asyncpg caches prepared-statement names per connection, but PgBouncer recycles TCP connections between requests, invalidating those names and producing \texttt{InvalidSQLStatementNameError} without the cache disabled.
+
+\paragraph{Google Drive (File Storage).}
+Audio MP3 previews ($\approx$150--300\,KB each) are stored in a personal Google Drive folder using an OAuth2 Desktop client with a long-lived refresh token (never expires under normal use). Files are set to \texttt{anyone/reader} permission after upload; \texttt{drive.usercontent.google.com} (the redirect target for public Drive files) serves \texttt{Access-Control-Allow-Origin: *}, allowing Wavesurfer.js to stream audio directly from the browser without a proxy. The \texttt{gdrive\_file\_id} column in \texttt{samples} enables O(1) deletion without parsing the URL.
+
+\paragraph{Local MIR Worker.}
+The \texttt{process\_queue} script polls Supabase for \texttt{status='pending'} rows and runs the three-model ML pipeline on each. CLAP ($\approx$900\,MB), YAMNet, and MusiCNN together require $\approx$3\,GB RAM --- unsuitable to co-host with the API on Railway Hobby's 8\,GB budget after the OS and Python runtime are accounted for. The worker connects directly to Supabase over the public internet and runs fine locally, writing results back through the same Supabase asyncpg connection the API uses.
+
+\section{Ingestion and Database Loading}
+
+The production library was bootstrapped via the Freesound APIv2. The \texttt{ingest\_overnight.py} script iterates $\approx$300 curated search queries (``kick drum'', ``ambient pad'', ``jazz piano'', ``808 bass'', etc.), downloading HQ MP3 previews and creating one \texttt{samples} row and one \texttt{processing\_queue(status='pending')} row per sound. The local MIR worker then drains the queue. At submission time the database contains \textbf{6{,}039 samples}, of which \textbf{99.4\%} have been fully processed (CLAP embedding, YAMNet tags, MusiCNN tags, Librosa features).
+
+\section{Authentication Flow}
+
+\begin{enumerate}
+  \item \texttt{POST /api/auth/register} --- creates user with bcrypt-hashed password; returns \texttt{UserOut} (no token).
+  \item \texttt{POST /api/auth/token} --- OAuth2 password-flow; the \texttt{username} form field accepts the user's \textbf{email address} (not display username); returns a signed HS256 JWT.
+  \item Subsequent requests carry \texttt{Authorization: Bearer <token>}. The \texttt{get\_current\_user} dependency decodes and validates the token on every protected endpoint.
+  \item Mixed-access endpoints (browse, search, download) use a \texttt{get\_optional\_user} dependency that returns \texttt{None} for unauthenticated callers rather than raising 401.
+\end{enumerate}
+
+Tokens expire after \texttt{ACCESS\_TOKEN\_EXPIRE\_MINUTES} (default 30). The frontend's Axios interceptor catches 401 responses and clears the stored token, effectively logging out the user.
+
+% =========================================================================
+\chapter{Key Queries and Indexing Strategy}
+% =========================================================================
+
+\section{Query 1: Vector Similarity Search}
+
+The semantic search feature encodes a text query (or uploaded audio clip) to a 512-dim vector using CLAP and retrieves the nearest samples by cosine distance:
+
+\begin{lstlisting}[style=sqlstyle,
+  caption={Phase 1 --- cosine-distance nearest-neighbour lookup via pgvector},
+  label={lst:vec-search}]
+SELECT ae.sample_id,
+       ae.embedding <=> :query_vec  AS dist
+FROM   audio_embeddings ae
+ORDER  BY dist ASC
+LIMIT  :k;
+\end{lstlisting}
+
+The \texttt{<=>} operator is pgvector's cosine distance. A second ORM query hydrates the full \texttt{Sample}, \texttt{AudioMetadata}, and \texttt{Tag} objects for the returned IDs:
+
+\begin{lstlisting}[style=pythonstyle,
+  caption={Phase 2 --- ORM hydration with selectinload, preserving distance order},
+  label={lst:vec-orm}]
+# Phase 1: raw SQL preserves distance ranking
+rows = await db.execute(
+    text("SELECT sample_id, embedding <=> :v AS dist "
+         "FROM audio_embeddings ORDER BY dist LIMIT :k"),
+    {"v": str(query_vec), "k": limit},
+)
+id_order = {row.sample_id: i for i, row in enumerate(rows)}
+
+# Phase 2: two targeted IN queries (no cartesian JOIN)
+stmt = (
+    select(Sample)
+    .options(selectinload(Sample.audio_metadata),
+             selectinload(Sample.tags))
+    .where(Sample.id.in_(id_order.keys()))
+)
+samples = (await db.execute(stmt)).scalars().unique().all()
+# Re-sort to match distance order from Phase 1
+samples.sort(key=lambda s: id_order[s.id])
+\end{lstlisting}
+
+\textbf{Why two queries?} SQLAlchemy \texttt{selectinload} cannot be combined with \texttt{LIMIT} on a \texttt{JOIN} query in async context without introducing a subquery. More importantly, pgvector's \texttt{<=>} operator returns raw row mappings, not ORM objects; a separate ORM query is needed to populate the full object graph.
+
+\textbf{Index:} An HNSW (Hierarchical Navigable Small World) index on \texttt{audio\_embeddings.embedding}:
+
+\begin{lstlisting}[style=sqlstyle,
+  caption={HNSW index for approximate nearest-neighbour cosine search},
+  label={lst:hnsw}]
+CREATE INDEX ix_audio_embeddings_hnsw
+    ON audio_embeddings
+ USING hnsw (embedding vector_cosine_ops)
+  WITH (m = 16, ef_construction = 64);
+\end{lstlisting}
+
+HNSW gives approximate nearest-neighbour search in $O(\log n)$ time with recall typically $>$95\%. At 6{,}000 samples the latency difference versus a full sequential scan is negligible; the index becomes critical at $\sim$100k samples and above. \texttt{m=16} (maximum connections per node) and \texttt{ef\_construction=64} (search width during build) are standard starting values offering a good accuracy/build-time tradeoff.
+
+\section{Query 2: Concurrent-Safe Queue Claim}
+
+The MIR worker claims exactly one unprocessed sample without blocking other worker instances:
+
+\begin{lstlisting}[style=sqlstyle,
+  caption={Atomic, deadlock-free queue claim using SELECT FOR UPDATE SKIP LOCKED},
+  label={lst:queue-claim}]
+SELECT pq.id, pq.sample_id, pq.retry_count
+  FROM processing_queue pq
+ WHERE pq.status = 'pending'
+ ORDER BY pq.created_at ASC
+ LIMIT 1
+   FOR UPDATE SKIP LOCKED;
+\end{lstlisting}
+
+\texttt{SKIP LOCKED} instructs PostgreSQL to skip any row that is already locked by another transaction, so two concurrent workers always claim different rows without deadlocking or blocking. A plain \texttt{FOR UPDATE} without \texttt{SKIP LOCKED} would serialise all workers on the same row (the first row in \texttt{ORDER BY created\_at}), destroying concurrency.
+
+\textbf{Index:} A partial index on \texttt{(created\_at)} filtered to \texttt{WHERE status = 'pending'} keeps the \texttt{ORDER BY} sort covered without scanning completed or failed rows:
+
+\begin{lstlisting}[style=sqlstyle, caption={Partial index to speed up pending-queue scans}]
+CREATE INDEX ix_pq_pending_created
+    ON processing_queue (created_at ASC)
+ WHERE status = 'pending';
+\end{lstlisting}
+
+\section{Query 3: Paginated Sample Browse with Eager Loading}
+
+The browse endpoint returns paginated samples with metadata and tags efficiently:
+
+\begin{lstlisting}[style=pythonstyle,
+  caption={Paginated sample listing --- selectinload avoids a cartesian JOIN},
+  label={lst:browse}]
+stmt = (
+    select(Sample)
+    .options(
+        selectinload(Sample.audio_metadata),  # 1 extra IN query
+        selectinload(Sample.tags),            # 1 extra IN query
+    )
+    .order_by(Sample.created_at.desc())
+    .offset(offset)
+    .limit(limit)
+)
+result = await db.execute(stmt)
+samples = result.scalars().unique().all()
+\end{lstlisting}
+
+SQLAlchemy \texttt{selectinload} issues two additional \texttt{IN} queries (one for \texttt{audio\_metadata}, one for \texttt{sample\_tags} joined to \texttt{tags}) rather than a three-way \texttt{JOIN} that produces a Cartesian product proportional to the number of tags per sample. For samples with 5--10 tags each, \texttt{selectinload} transfers $\sim$10$\times$ fewer rows. \texttt{joinedload} is incompatible with \texttt{LIMIT} in SQLAlchemy async context.
+
+\textbf{Index:} \texttt{samples(created\_at DESC)} supports the default ordering. The composite PK \texttt{(sample\_id, tag\_id)} on \texttt{sample\_tags} doubles as the index for the \texttt{selectinload} IN lookup.
+
+% =========================================================================
+\chapter{Complexity Component: The Concurrent MIR Pipeline}
+% =========================================================================
+
+The most technically distinctive aspect of Audio Sample Manager is the background machine-learning pipeline that automatically annotates every sample using three ML frameworks --- two of which cannot coexist in the same Python process --- running concurrently.
+
+\section{The Three Models}
+
+\begin{center}
+\begin{tabular}{llll}
+\toprule
+\textbf{Model} & \textbf{Framework} & \textbf{Output} & \textbf{Approx.\ size} \\
+\midrule
+LAION-CLAP 1.1.7   & PyTorch  & 512-dim float vector & 900\,MB \\
+Google YAMNet      & TensorFlow 2 (Hub) & Top-$k$ AudioSet labels & $<$10\,MB \\
+MTG MusiCNN 0.1.6  & TensorFlow 1 (\texttt{v1.compat}) & Top-$k$ MagnaTagATune labels & $\sim$50\,MB \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+Librosa 0.10 extracts seven additional audio features (BPM, key, energy, loudness, spectral centroid, zero-crossing rate, sample rate) from the same audio bytes.
+
+\section{Pipeline Architecture}
+
+When a sample is created, a \texttt{ProcessingQueue} row is inserted and a FastAPI \texttt{BackgroundTask} is registered. The pipeline is split across \textbf{three separate DB sessions} to survive Supabase's PgBouncer connection recycling (idle connections are returned to the pool after $\approx$30\,s):
+
+\begin{enumerate}
+  \item \textbf{Session A} ($<$1\,s): Atomically claim the queue row (\texttt{UPDATE WHERE status='pending'}); read \texttt{sample.file\_url}; close session and return the connection.
+  \item \textbf{No session} (60--120\,s): Download audio bytes via \texttt{httpx} (\texttt{follow\_redirects=True} is required --- Google Drive returns a 302 to \texttt{drive.usercontent.google.com}); then, using \texttt{loop.run\_in\_executor} to avoid blocking the event loop:
+  \begin{itemize}
+    \item \textit{Executor thread 1:} Librosa feature extraction
+    \item \textit{Executor thread 2:} CLAP audio encoding $\to$ 512-dim vector
+    \item \textit{Executor threads 3\,\&\,4:} YAMNet and MusiCNN inference run concurrently via \texttt{asyncio.gather}
+  \end{itemize}
+  \item \textbf{Session B} ($<$1\,s): Write \texttt{audio\_metadata}, \texttt{audio\_embeddings}, tags; set \texttt{status='done'}.
+  \item \textbf{Session C} (failure path only): Fresh session sets \texttt{status='failed'} and writes \texttt{error\_log}.
+\end{enumerate}
+
+\section{ML Worker Registry}
+
+All models are lazy singletons loaded once per process:
+
+\begin{lstlisting}[style=pythonstyle,
+  caption={Lazy ML singleton registry --- weights load exactly once},
+  label={lst:registry}]
+@lru_cache(maxsize=1)
+def clap() -> CLAPWorker:
+    return CLAPWorker()     # LAION-CLAP ~900 MB
+
+@lru_cache(maxsize=1)
+def yamnet() -> YAMNetWorker:
+    return YAMNetWorker()   # TF Hub download on first call
+
+@lru_cache(maxsize=1)
+def musicnn() -> MusiCNNWorker:
+    return MusiCNNWorker()  # launches persistent subprocess
+\end{lstlisting}
+
+\section{Framework Isolation: MusiCNN Subprocess}
+
+YAMNet requires TensorFlow 2 \textit{eager} mode. MusiCNN's library calls \texttt{tf.compat.v1.disable\_eager\_execution()} as a \textbf{module-level side effect} at import time, permanently switching the TF runtime to graph mode and silently breaking YAMNet (zero predictions, no exception).
+
+\textbf{Solution:} MusiCNN runs in a \textbf{persistent child subprocess} launched with \texttt{subprocess.Popen}. Communication uses newline-delimited JSON over stdin/stdout:
+
+\begin{lstlisting}[style=pythonstyle,
+  caption={MusiCNN subprocess IPC --- parent/child JSON protocol},
+  label={lst:musicnn-ipc}]
+# Parent sends (one JSON object per line):
+{"path": "/tmp/sample_abc123.wav", "top_k": 5}
+
+# Child (_musicnn_proc.py) responds:
+{"tags": ["guitar", "jazz", "melodic", "strings", "mellow"]}
+
+# Child signals readiness at startup:
+READY
+\end{lstlisting}
+
+The subprocess is launched with \texttt{executable="/usr/bin/python3"} (system Python, not Anaconda). This was essential: Anaconda prepends \texttt{\textasciitilde/anaconda3/lib/} to the dynamic linker's search path, causing its \texttt{libprotobuf.so.25.3.0} to conflict with TensorFlow's bundled protobuf ABI, producing a deterministic \texttt{SIGSEGV} at offset \texttt{0x16d5fd} inside \texttt{sess.run()} on the first protobuf deserialisation call. System Python does not have Anaconda's library directory on its linker path, so TF finds its own bundled protobuf and runs cleanly.
+
+The child process starts once, loads TF and MusiCNN (the expensive step), then loops servicing requests until the parent shuts down. The parent applies a 5-minute per-call timeout and restarts the child on any crash. Audio shorter than 3\,s returns \texttt{[]} --- MusiCNN's analysis window requires at least 3\,s of audio and raises an \texttt{UnboundLocalError} on \texttt{batch} otherwise; the duration guard runs in the \textbf{parent} process using \texttt{soundfile} (not Librosa) because importing Librosa before TensorFlow inside a \texttt{spawn} subprocess causes a separate \texttt{libprotobuf} segfault from shared-library load-order conflicts.
+
+\section{pgvector and the Shared Embedding Space}
+
+CLAP was trained on large-scale audio--caption pairs using a contrastive objective: audio and text that describe the same sound are pulled close together in the 512-dim embedding space; unrelated pairs are pushed apart. This means the vector space is \textit{jointly} meaningful across modalities. A text query \textit{``heavy rain on a tin roof''} and a recorded sample of rain hitting a tin roof will be near neighbours in the HNSW graph even if the sample was never tagged with those words --- the model has learned the association from training data.
+
+The HNSW index delivers approximate nearest-neighbour search at sub-millisecond latency (at 6k samples) and sub-10\,ms latency at $10^6$ samples, with recall typically exceeding 95\% versus exact brute-force search.
+
+% =========================================================================
+\chapter{The Journey: A Retrospective}
+% =========================================================================
+
+\section{Roadblocks}
+
+\subsection{Bug 1: PgBouncer Recycled the Connection Mid-Pipeline (\texttt{PendingRollbackError})}
+
+\textbf{Symptom.} The MIR pipeline succeeded on the first sample, then failed on every subsequent sample with:
+\begin{quote}
+  \texttt{PendingRollbackError: Can't reconnect until invalid transaction is rolled back.}
+\end{quote}
+
+\textbf{Root cause.} Supabase uses PgBouncer in \textit{transaction} mode. Transaction-mode pooling recycles the underlying TCP connection back to the pool after each database transaction completes. The original pipeline held a single \texttt{AsyncSession} open for the entire 60--120\,s of ML inference, long past PgBouncer's idle timeout. By the time it attempted to write results, PgBouncer had recycled the connection; the session's internal transaction state was invalid and could not be committed.
+
+\textbf{Fix.} Redesigned the pipeline around three short-lived sessions (described in Chapter 5). No session is held open for more than one second of actual DB work. The connection is explicitly returned to the pool during ML inference.
+
+\subsection{Bug 2: TensorFlow Eager Mode Silently Disabled (YAMNet Returns Zeros)}
+
+\textbf{Symptom.} After integrating MusiCNN, YAMNet returned all-zero class scores on every sample. No exception was raised.
+
+\textbf{Root cause.} The \texttt{musicnn} package calls \texttt{tf.compat.v1.disable\_eager\_execution()} as a module-level statement in \texttt{musicnn/tagger.py}. Any \texttt{import musicnn.tagger} anywhere in the main process permanently switched TensorFlow from eager to graph mode before YAMNet could initialise. YAMNet's TF2 Hub model silently produced zeros rather than raising an error in graph mode.
+
+\textbf{Fix.} MusiCNN is \textit{never imported} in the main process. The \texttt{MusiCNNWorker} class manages only a subprocess handle; the actual \texttt{import musicnn} happens exclusively inside the child subprocess.
+
+\subsection{Bug 3: Anaconda \texttt{libprotobuf} ABI Conflict Causes \texttt{SIGSEGV}}
+
+\textbf{Symptom.} The MusiCNN subprocess crashed with a segmentation fault (\texttt{SIGSEGV}) at offset \texttt{0x16d5fd} inside \texttt{libprotobuf.so} on the first call to \texttt{sess.run()}. The crash was 100\% reproducible.
+
+\textbf{Root cause.} Anaconda's installer prepends \texttt{\textasciitilde/anaconda3/lib/} to the dynamic linker's search path for all processes in the environment. When a \texttt{spawn} subprocess inherits this environment and loads TensorFlow, the dynamic linker finds Anaconda's \texttt{libprotobuf.so.25.3.0} before TF's own bundled version. The two protobuf builds have incompatible ABIs; the first serialisation call inside \texttt{sess.run()} crashes the process.
+
+\textbf{Fix.} Launch the subprocess with \texttt{executable="/usr/bin/python3"} instead of \texttt{sys.executable}. The system Python executable does not inherit Anaconda's \texttt{lib/} directory on the dynamic linker path, so TF loads its own protobuf cleanly. One line changed in \texttt{musicnn\_worker.py}.
+
+\section{What Was Easier Than Expected}
+
+\begin{itemize}
+  \item \textbf{pgvector integration.} Adding a \texttt{vector(512)} column and an HNSW index required fewer than 20 lines of migration SQL. The \texttt{<=>} operator compososes naturally with standard PostgreSQL expressions.
+  \item \textbf{FastAPI async patterns.} The combination of \texttt{async def} endpoints, \texttt{async\_sessionmaker}, and \texttt{BackgroundTasks} composed with very little boilerplate.
+  \item \textbf{Google Drive OAuth2.} Once the refresh token was generated with a one-off script, the Drive API client handled token refresh automatically with zero additional code. The \texttt{anyone/reader} permission combined with Drive's CORS headers eliminated the need for a server-side proxy to stream audio.
+  \item \textbf{Railway deployment.} The \texttt{nixpacks.toml} + \texttt{Procfile} + \texttt{requirements-railway.txt} pattern kept the production build completely separate from the local ML environment with minimal configuration.
+\end{itemize}
+
+\section{What Was Harder Than Expected}
+
+\begin{itemize}
+  \item \textbf{PgBouncer transaction-mode + asyncpg prepared statements.} asyncpg caches prepared-statement names per connection by default. When PgBouncer recycles connections, those names become invalid on the new connection, producing \texttt{InvalidSQLStatementNameError} on virtually every request in production (but never locally, where the connection string bypasses PgBouncer). The fix --- \texttt{connect\_args=\{"statement\_cache\_size": 0\}} --- is not documented prominently in either the SQLAlchemy or Supabase documentation.
+  \item \textbf{TF/PyTorch cross-framework isolation.} The YAMNet/MusiCNN eager-mode conflict was especially difficult because YAMNet produced no error --- it silently returned zeros. Diagnosing a ``model that works alone but not together'' required systematic import-order experiments. The subprocess isolation approach, while correct, added significant engineering complexity (IPC design, subprocess lifecycle, timeout handling, crash recovery).
+  \item \textbf{Deployment from WSL on a Windows/OneDrive path.} The \texttt{railway up} CLI packaged \texttt{\_\_pycache\_\_/*.pyc} bytecode files alongside Python sources (respecting \texttt{.gitignore} but not \texttt{.railwayignore}). On Railway, Python attempted to exec those \texttt{.pyc} binaries as source text, producing \texttt{SyntaxError: source code string cannot contain null bytes}. Fix: add a \texttt{.railwayignore} and deploy via \texttt{git push} to the connected GitHub repository instead of \texttt{railway up}.
+\end{itemize}
+
+\section{Experience with AI-Assisted Development}
+
+Claude Code (Anthropic) was used throughout the project for architecture design, debugging sessions, code generation, and documentation. The workflow that emerged: describe a symptom or design constraint in natural language $\to$ review and critique the generated code $\to$ iterate. The AI was most effective when given:
+
+\begin{itemize}
+  \item Specific stack traces and error messages. It traced \texttt{PendingRollbackError} to the PgBouncer interaction on the first attempt when given the full trace and the Supabase connection string.
+  \item Hard constraints (\textit{``no Celery, must work with asyncpg, must survive PgBouncer recycling with a 30-second idle timeout''}).
+  \item Existing code context. It never hallucinated API signatures that were not in scope.
+\end{itemize}
+
+It was least effective on environment-specific issues. The Anaconda \texttt{libprotobuf} ABI conflict required local reproduction to confirm; the AI correctly identified the ABI mismatch hypothesis and the Anaconda library-path mechanism, but could not predict which exact \texttt{.so} would be found first on a specific machine without running \texttt{ldd} locally. Overall, it accelerated boilerplate-heavy tasks (schema design, migration files, API endpoint stubs, CORS configuration) by approximately $3\times$, and debugging by $\approx 1.5\times$ --- it narrowed the hypothesis space quickly, but verification always required running code.
+
+\begin{warningbox}
+  \textbf{[NOT YET ACHIEVED: Demo video not yet recorded.]}
+  A $\sim$3-minute walkthrough demonstrating semantic text search, audio-clip search,
+  sample detail pages, waveform playback, the social layer (comments, ratings,
+  collections), and the \texttt{/api/admin/queue} monitoring endpoint is planned but
+  has not been recorded as of this writing. It will be linked from the repository
+  \texttt{README.md} prior to final presentations and kept as a backup in case of
+  live-deployment issues during the Q\&A session.
+\end{warningbox}
+
+% =========================================================================
+\chapter{Scaling to One Million Active Users}
+% =========================================================================
+
+The current architecture is a single-instance monolith appropriate for a class project. The following analysis identifies the first bottlenecks at 1\,M active users and maps each to a concrete mitigation.
+
+\section{Database Layer}
+
+\begin{itemize}
+  \item \textbf{Read replicas.} The browse and search endpoints are read-heavy. PostgreSQL streaming replication to 2--3 read replicas, with the SQLAlchemy engine routing reads to replicas and writes to the primary, multiplies read throughput linearly at no schema cost.
+  \item \textbf{Connection pooling.} PgBouncer (already provided by Supabase) should be in \textit{session} mode for short OLTP queries where prepared-statement caching matters; the MIR worker's long-running transactions should use a direct connection. At 1\,M users, a dedicated PgBouncer layer outside Supabase gives finer control over pool sizing and timeout policy.
+  \item \textbf{pgvector at scale.} HNSW remains fast and accurate to $\sim$10\,M vectors on a single node. Beyond that, a dedicated vector database (Pinecone, Weaviate, Qdrant) with horizontal sharding is appropriate. At 1\,M users the bottleneck is the API and file-delivery tier, not pgvector.
+  \item \textbf{Table partitioning.} \texttt{download\_history} and \texttt{search\_queries} grow without bound. Range-partition by month using \texttt{pg\_partman}; archive partitions older than 6 months to cold storage (S3 Parquet via \texttt{COPY}).
+  \item \textbf{Full-text index for tag search.} The current tag-filter path does a sequential scan of \texttt{sample\_tags} for a given \texttt{tag\_id}. A GIN index on \texttt{sample\_tags(tag\_id)} and a tsvector column on \texttt{samples.title} would support hybrid keyword + vector search.
+\end{itemize}
+
+\section{Application Layer}
+
+\begin{itemize}
+  \item \textbf{Horizontal API scaling.} FastAPI + Uvicorn is stateless; multiple instances behind a load balancer (Railway multiple replicas, ECS Fargate, or Kubernetes) require no code changes. The single-worker constraint from ML singletons is lifted once CLAP is extracted to its own service.
+  \item \textbf{CLAP inference microservice.} Move the CLAP encoder to a GPU-backed endpoint (AWS SageMaker Realtime Endpoint, \texttt{g4dn.xlarge}). The main API calls it via gRPC with a 200\,ms timeout. This decouples search latency from API memory and allows the GPU instance to handle bursts with queue-based autoscaling.
+  \item \textbf{Caching layer (Redis).}
+  \begin{itemize}
+    \item Popular sample metadata: 10-minute TTL keyed by \texttt{sample\_id}.
+    \item Search query embedding cache: identical text queries re-use the stored vector (avoid a GPU inference call). LRU eviction, 1\,GB budget.
+    \item Rate-limit counters and session validation.
+  \end{itemize}
+\end{itemize}
+
+\section{MIR Pipeline}
+
+\begin{itemize}
+  \item Replace FastAPI \texttt{BackgroundTasks} with a proper job queue. \textbf{ARQ} (async Redis queue) or \textbf{Celery} + Redis are both viable; the \texttt{processing\_queue} table is already queue-shaped, so the migration is incremental. Workers become stateless and horizontally scalable.
+  \item CLAP encoding runs on the GPU inference service. YAMNet and MusiCNN are CPU-friendly and can run in parallel across many cheap CPU worker instances.
+  \item For very high ingestion volume (1\,M new samples/day), batch CLAP encoding using GPU instances in off-peak hours, then insert vectors in bulk with \texttt{COPY}.
+\end{itemize}
+
+\section{File Storage}
+
+Replace personal Google Drive with a CDN-backed object store:
+
+\begin{itemize}
+  \item \textbf{AWS S3} for durability, versioning, and programmatic access at scale (no OAuth2 personal-credential dependency).
+  \item \textbf{CloudFront CDN} in front of S3: audio files cached at edge nodes near each user. Pre-signed URLs (valid 1\,hour) replace the current \texttt{anyone/reader} Google Drive permission model, allowing per-request access control without a proxy.
+  \item At 6{,}000 samples $\times$ 200\,KB average $\approx$ 1.2\,GB today. At 1\,M samples $\approx$ 200\,GB --- well within S3's economic range ($\sim$\$4.50/month storage + egress).
+\end{itemize}
+
+\section{Scaling Summary}
+
+\begin{center}
+\begin{tabularx}{\textwidth}{lXX}
+\toprule
+\textbf{Component} & \textbf{Current (class project)} & \textbf{1\,M-user target} \\
+\midrule
+Database     & Supabase free tier (shared PgBouncer)
+             & RDS r6g.xlarge primary + 2 read replicas, dedicated PgBouncer \\
+\addlinespace
+API          & Railway Hobby, 1 Uvicorn worker (\$5/mo)
+             & $4\times$ ECS Fargate tasks behind ALB \\
+\addlinespace
+CLAP inference & In-process (Railway, CPU)
+               & SageMaker \texttt{g4dn.xlarge} gRPC endpoint \\
+\addlinespace
+MIR pipeline & FastAPI \texttt{BackgroundTasks} + local worker
+             & ARQ + Redis job queue, $N$ auto-scaled CPU workers \\
+\addlinespace
+File storage & Google Drive personal quota (1\,TB)
+             & S3 + CloudFront, pre-signed URLs \\
+\addlinespace
+Caching      & None
+             & Redis (Upstash or ElastiCache): metadata, embedding, rate-limit \\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+% =========================================================================
+%  Appendix
+% =========================================================================
+\appendix
+\chapter{Repository and Live Links}
+
+\begin{itemize}
+  \item \textbf{GitHub Repository:}\\
+    \url{https://github.com/joshmiao1065/MIR-Integrated-Audio-Sample-Platform}
+  \item \textbf{Live Backend (Railway):}\\
+    \url{https://audio-sample-manager-production.up.railway.app}
+  \item \textbf{Live Frontend (Vercel):}\\
+    \url{https://audio-sample-manager-6ouyzyyoo-josh-miao-s-projects.vercel.app}
+  \item \textbf{Interactive API Documentation (Swagger UI):}\\
+    \url{https://audio-sample-manager-production.up.railway.app/docs}
+  \item \textbf{Demo Video:}\\
+    \textbf{[NOT YET RECORDED --- link to be added to README.md before final presentation]}
+\end{itemize}
+
+\chapter{Database Schema Reference}
+
+The complete schema is defined in a single Alembic migration:
+
+\begin{center}
+\texttt{alembic/versions/001\_initial\_schema.py}
+\end{center}
+
+It covers all 16 tables, the \texttt{vector} and \texttt{uuid-ossp} extension enablement, the \texttt{query\_type\_enum} and \texttt{queue\_status\_enum} PostgreSQL enum types, all foreign keys with their delete-action semantics (CASCADE, SET NULL), the HNSW index, and seven additional B-tree indexes supporting common access patterns.
+
+\end{document}
