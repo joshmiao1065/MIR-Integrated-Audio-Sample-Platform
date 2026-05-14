@@ -17,7 +17,7 @@ export function Navbar() {
       </Link>
       <div className="nav-links">
         <Link to="/browse">Browse</Link>
-        {username && <Link to="/feed">Feed</Link>}
+        {username && <Link to="/social">Social</Link>}
         {username && <Link to="/collections">Collections</Link>}
         {username && <Link to="/upload">Upload</Link>}
         {username ? (

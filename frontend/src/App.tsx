@@ -9,6 +9,7 @@ import { CollectionsPage } from "./pages/CollectionsPage";
 import { UploadPage } from "./pages/UploadPage";
 import { FeedPage } from "./pages/FeedPage";
 import { ProfilePage } from "./pages/ProfilePage";
+import { SocialPage } from "./pages/SocialPage";
 
 export default function App() {
   return (
@@ -23,6 +24,7 @@ export default function App() {
           <Route path="/login" element={<LoginPage />} />
           <Route path="/register" element={<RegisterPage />} />
           <Route path="/collections" element={<CollectionsPage />} />
+          <Route path="/social" element={<SocialPage />} />
           <Route path="/feed" element={<FeedPage />} />
           <Route path="/profile/:username" element={<ProfilePage />} />
         </Routes>
