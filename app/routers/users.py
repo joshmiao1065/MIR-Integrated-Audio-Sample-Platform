@@ -214,7 +214,7 @@ async def get_user_profile(
 @router.get("/{username}/followers", response_model=List[UserPublic])
 async def list_followers(
     username: str,
-    limit: int = Query(default=20, ge=1, le=100),
+    limit: int = Query(default=20, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
     db: AsyncSession = Depends(get_db),
 ):
@@ -233,7 +233,7 @@ async def list_followers(
 @router.get("/{username}/following", response_model=List[UserPublic])
 async def list_following(
     username: str,
-    limit: int = Query(default=20, ge=1, le=100),
+    limit: int = Query(default=20, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
     db: AsyncSession = Depends(get_db),
 ):

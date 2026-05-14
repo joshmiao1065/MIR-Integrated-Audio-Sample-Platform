@@ -40,3 +40,4 @@ huggingface/
 "Created pip tmp dir. Starting TF reinstall..."
 cd
 echo
+.vercel

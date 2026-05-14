@@ -200,10 +200,13 @@ audio-sample-manager/
 │   │   └── system.py             # download_history, search_queries, processing_queue, api_audit_log
 │   ├── routers/
 │   │   ├── auth.py               # POST /api/auth/register, /api/auth/token
-│   │   ├── samples.py            # GET/POST /api/samples + _run_mir_pipeline background task
+│   │   ├── samples.py            # GET/POST/upload /api/samples + _run_mir_pipeline background task
 │   │   ├── search.py             # POST /api/search/text, /api/search/audio
 │   │   ├── social.py             # Comments, ratings, download tracking (all under /api/samples/{id}/)
-│   │   └── collections.py        # CRUD for collections + item management
+│   │   ├── collections.py        # CRUD for collections + item management
+│   │   ├── users.py              # User profiles, follow/unfollow, followers/following, feed, activity
+│   │   ├── recommendations.py    # GET /api/recommendations/ (personalized) + /similar/{id}
+│   │   └── tags.py               # GET /api/tags/ with usage counts
 │   ├── schemas/
 │   │   ├── sample.py             # SampleOut, SampleCreate, AudioMetadataOut, TagOut
 │   │   ├── search.py             # TextSearchRequest, SearchResponse
@@ -529,9 +532,34 @@ CLAP inference runs in a thread executor on both routes to avoid blocking the ev
 | GET | `/` | required | List current user's collections |
 | POST | `/` | required | Create collection |
 | DELETE | `/{id}` | required | Delete own collection (cascades items) |
-| GET | `/{id}/samples` | optional | List samples; 403 if private and not owner |
+| GET | `/{id}/samples` | optional | List samples; 403 if private/friends-only and not authorised |
 | POST | `/{id}/samples/{sample_id}` | required | Add sample (idempotent; validates sample exists first) |
 | DELETE | `/{id}/samples/{sample_id}` | required | Remove sample from collection |
+
+### Users / Social Graph — `/api/users`
+| Method | Path | Auth | Description |
+|---|---|---|---|
+| GET | `/search` | — | Search users by username prefix |
+| GET | `/feed` | required | Activity feed from followed users (paginated) |
+| GET | `/{username}` | optional | Public user profile |
+| POST | `/{username}/follow` | required | Follow a user |
+| DELETE | `/{username}/follow` | required | Unfollow a user |
+| DELETE | `/{username}/follower` | required | Remove a follower (blocks them from your followers list) |
+| GET | `/{username}/followers` | — | List followers (up to 500) |
+| GET | `/{username}/following` | — | List following (up to 500) |
+| GET | `/{username}/samples` | — | Samples uploaded by this user |
+| GET | `/{username}/activity` | — | Public activity log for this user |
+
+### Recommendations — `/api/recommendations`
+| Method | Path | Auth | Description |
+|---|---|---|---|
+| GET | `/` | optional | Personalised recommendations (TF-IDF tag scoring); falls back to trending when no history |
+| GET | `/similar/{sample_id}` | — | Top-6 similar samples by tag overlap |
+
+### Tags — `/api/tags`
+| Method | Path | Auth | Description |
+|---|---|---|---|
+| GET | `/` | — | All tags with per-tag sample counts |
 
 ---
 
