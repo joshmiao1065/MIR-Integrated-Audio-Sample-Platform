@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import os
 import re
 import uuid
 from datetime import datetime, timezone
@@ -215,7 +216,15 @@ async def upload_sample(
     )
     sample = result.scalar_one()
 
-    background_tasks.add_task(_run_mir_pipeline, sample.id)
+    # On Railway, CLAP (~900 MB) exceeds the 512 MB memory limit — running the
+    # pipeline here would OOM and mark the queue entry as `failed`.  Leave the
+    # ProcessingQueue row as `pending` so the local process_queue.py picks it up.
+    # On local dev (no RAILWAY_ENVIRONMENT set), run the pipeline inline.
+    if not os.environ.get("RAILWAY_ENVIRONMENT"):
+        background_tasks.add_task(_run_mir_pipeline, sample.id)
+    else:
+        log.info("Railway env detected — sample %s queued for local MIR worker.", sample.id)
+
     return sample
 
 
