@@ -86,6 +86,27 @@ async def unfollow_user(
     # Idempotent: 204 even if not following
 
 
+@router.delete("/{username}/follower", status_code=status.HTTP_204_NO_CONTENT)
+async def remove_follower(
+    username: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Remove a specific user from your followers (they can no longer see you followed them)."""
+    target = await _get_user_by_username(username, db)
+    result = await db.execute(
+        select(Follow).where(
+            Follow.follower_id == target.id,
+            Follow.following_id == current_user.id,
+        )
+    )
+    follow = result.scalar_one_or_none()
+    if follow:
+        await db.delete(follow)
+        await db.commit()
+    # Idempotent: 204 even if they weren't following you
+
+
 # ── Profile ───────────────────────────────────────────────────────────────────
 
 # NOTE: "search" and "feed" must be declared BEFORE "/{username}" so FastAPI

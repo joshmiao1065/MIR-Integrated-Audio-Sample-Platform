@@ -9,6 +9,10 @@ export async function unfollowUser(username: string): Promise<void> {
   await api.delete(`/users/${username}/follow`);
 }
 
+export async function removeFollower(username: string): Promise<void> {
+  await api.delete(`/users/${username}/follower`);
+}
+
 export async function getUserProfile(username: string): Promise<UserProfile> {
   const res = await api.get<UserProfile>(`/users/${username}`);
   return res.data;
